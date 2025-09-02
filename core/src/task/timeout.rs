@@ -1,10 +1,12 @@
 use std::error::Error;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use typed_builder::TypedBuilder;
+use crate::overlap::OverlapStrategy;
 use crate::task::{Schedule, Task};
 
 #[derive(TypedBuilder)]
@@ -43,8 +45,8 @@ impl<T: Task> TimeoutTask<T> {
 
 #[async_trait]
 impl<T: Task> Task for TimeoutTask<T> {
-    async fn execute(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
-        tokio::time::timeout(self.max_duration, self.task.execute())
+    async fn execute_inner(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
+        tokio::time::timeout(self.max_duration, self.task.execute_inner())
             .await
             .unwrap_or_else(|_| Err(Arc::new(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
@@ -60,12 +62,20 @@ impl<T: Task> Task for TimeoutTask<T> {
         self.task.total_runs().await
     }
 
-    async fn maximum_runs(&self) -> Option<u64> {
+    async fn maximum_runs(&self) -> Option<NonZeroU64> {
         self.task.maximum_runs().await
+    }
+
+    async fn set_maximum_runs(&mut self, max_runs: NonZeroU64) {
+        self.task.set_maximum_runs(max_runs).await;
     }
 
     async fn set_total_runs(&mut self, runs: u64) {
         self.task.set_total_runs(runs).await;
+    }
+
+    async fn set_last_execution(&mut self, exec: DateTime<Local>) {
+        self.last_execution.swap(Arc::new(exec));
     }
 
     async fn get_debug_label(&self) -> String {
@@ -74,5 +84,9 @@ impl<T: Task> Task for TimeoutTask<T> {
 
     async fn last_execution(&self) -> DateTime<Local> {
         *self.last_execution.load().clone()
+    }
+
+    async fn overlap_policy(&self) -> Arc<dyn OverlapStrategy> {
+        self.task.overlap_policy().await
     }
 }

@@ -1,7 +1,9 @@
 use std::error::Error;
-use crate::task::Arc;
+use crate::task::{Arc};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::num::NonZeroU64;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -10,6 +12,7 @@ use typed_builder::TypedBuilder;
 use crate::errors::ChronologErrors;
 use crate::task::{Schedule, Task};
 use once_cell::sync::Lazy;
+use crate::overlap::{OverlapStrategy, RerunAfterCompletion};
 
 static EXECUTION_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
@@ -19,25 +22,28 @@ pub struct ExecutionTaskConfig<E, F>
 where
     ExecutionTask<E, F>: From<ExecutionTaskConfig<E, F>>,
     E: Send + Sync + Debug + 'static,
-    F: Fn(ExecutionTaskMetadata) -> Result<(), E> + Send + Sync
+    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
 {
     func: F,
     schedule: Schedule,
 
     #[builder(default, setter(strip_option))]
-    max_runs: Option<u64>,
+    max_runs: Option<NonZeroU64>,
 
     #[builder(default, setter(strip_option))]
     debug_label: Option<String>,
 
     #[builder(default, setter(skip))]
-    _marker: PhantomData<E>
+    _marker: PhantomData<E>,
+
+    #[builder(default = Arc::new(RerunAfterCompletion))]
+    overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
 impl<E, F> From<ExecutionTaskConfig<E, F>> for ExecutionTask<E, F>
 where
     E: Send + Sync + Debug + 'static,
-    F: Fn(ExecutionTaskMetadata) -> Result<(), E> + Send + Sync
+    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
 {
     fn from(config: ExecutionTaskConfig<E, F>) -> Self {
         let creation_time = Local::now();
@@ -53,7 +59,8 @@ where
                 schedule: config.schedule,
                 runs: 0,
                 max_runs: config.max_runs,
-                debug_label
+                debug_label,
+                overlap_policy: config.overlap_policy,
             },
             last_execution: ArcSwap::from_pointee(creation_time),
             _marker: PhantomData::default()
@@ -64,7 +71,7 @@ where
 pub struct ExecutionTask<E, F>
 where
     E: Send + Sync + Debug + 'static,
-    F: Fn(ExecutionTaskMetadata) -> Result<(), E> + Send + Sync
+    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
 {
     func: F,
     metadata: ExecutionTaskMetadata,
@@ -73,34 +80,17 @@ where
 }
 
 pub struct ExecutionTaskMetadata {
-    schedule: Schedule,
-    runs: u64,
-    max_runs: Option<u64>,
-    debug_label: String,
-}
-
-impl ExecutionTaskMetadata {
-    pub fn get_schedule(&self) -> &Schedule {
-        &self.schedule
-    }
-
-    pub fn get_runs(&self) -> u64 {
-        self.runs
-    }
-
-    pub fn get_max_runs(&self) -> Option<u64> {
-        self.max_runs
-    }
-
-    pub fn get_debug_label(&self) -> &String {
-        &self.debug_label
-    }
+    pub schedule: Schedule,
+    pub runs: u64,
+    pub max_runs: Option<NonZeroU64>,
+    pub debug_label: String,
+    pub overlap_policy: Arc<dyn OverlapStrategy>
 }
 
 impl<E, F> ExecutionTask<E, F>
 where
     E: Send + Sync + Debug + 'static,
-    F: Fn(ExecutionTaskMetadata) -> Result<(), E> + Send + Sync
+    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
 {
     pub fn builder() -> ExecutionTaskConfigBuilder<E, F> {
         ExecutionTaskConfig::builder()
@@ -111,16 +101,17 @@ where
 impl<E, F> Task for ExecutionTask<E, F>
 where
     E: Send + Sync + Debug + 'static,
-    F: Fn(ExecutionTaskMetadata) -> Result<(), E> + Send + Sync
+    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
 {
-    async fn execute(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
+    async fn execute_inner(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
         let cloned_metadata = ExecutionTaskMetadata {
             schedule: self.metadata.schedule.clone(),
             runs: self.metadata.runs,
             max_runs: self.metadata.max_runs,
+            overlap_policy: self.metadata.overlap_policy.clone(),
             debug_label: self.metadata.debug_label.clone(),
         };
-        let result = (self.func)(cloned_metadata);
+        let result = (self.func)(cloned_metadata).await;
         if let Err(err) = result {
             return Err(Arc::new(ChronologErrors::FailedExecution(
                 self.get_debug_label().await, Box::new(err))
@@ -138,12 +129,20 @@ where
         self.metadata.runs
     }
 
-    async fn maximum_runs(&self) -> Option<u64> {
+    async fn maximum_runs(&self) -> Option<NonZeroU64> {
         self.metadata.max_runs
+    }
+
+    async fn set_maximum_runs(&mut self, max_runs: NonZeroU64) {
+        self.metadata.max_runs = Some(max_runs)
     }
 
     async fn set_total_runs(&mut self, runs: u64) {
         self.metadata.runs = runs;
+    }
+
+    async fn set_last_execution(&mut self, exec: DateTime<Local>) {
+        self.last_execution.swap(Arc::new(exec));
     }
 
     async fn get_debug_label(&self) -> String {
@@ -152,5 +151,9 @@ where
 
     async fn last_execution(&self) -> DateTime<Local> {
         *self.last_execution.load().clone()
+    }
+
+    async fn overlap_policy(&self) -> Arc<dyn OverlapStrategy> {
+        self.metadata.overlap_policy.clone()
     }
 }

@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use arc_swap::ArcSwap;
@@ -7,6 +8,7 @@ use chrono::{DateTime, Local};
 use typed_builder::TypedBuilder;
 use crate::task::{Schedule, Task};
 use once_cell::sync::Lazy;
+use crate::overlap::{OverlapStrategy, RerunAfterCompletion};
 
 static SEQUENTIAL_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
@@ -24,13 +26,16 @@ where SequentialTask: From<SequentialTaskConfig> {
     schedule: Schedule,
 
     #[builder(default, setter(strip_option))]
-    max_runs: Option<u64>,
+    max_runs: Option<NonZeroU64>,
 
     #[builder(default, setter(strip_option))]
     debug_label: Option<String>,
 
     #[builder(default = SequentialTaskPolicy::RunUntilFailure)]
-    policy: SequentialTaskPolicy,
+    sequential_policy: SequentialTaskPolicy,
+
+    #[builder(default = Arc::new(RerunAfterCompletion))]
+    overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
 impl From<SequentialTaskConfig> for SequentialTask  {
@@ -48,7 +53,8 @@ impl From<SequentialTaskConfig> for SequentialTask  {
             runs: 0,
             max_runs: config.max_runs,
             debug_label,
-            policy: config.policy,
+            sequential_policy: config.sequential_policy,
+            overlap_policy: config.overlap_policy,
             last_execution: ArcSwap::new(Arc::new(creation_time)),
         }
     }
@@ -58,10 +64,11 @@ pub struct SequentialTask {
     tasks: Vec<Arc<dyn Task>>,
     schedule: Schedule,
     runs: u64,
-    max_runs: Option<u64>,
+    max_runs: Option<NonZeroU64>,
     debug_label: String,
-    policy: SequentialTaskPolicy,
-    last_execution: ArcSwap<DateTime<Local>>
+    sequential_policy: SequentialTaskPolicy,
+    last_execution: ArcSwap<DateTime<Local>>,
+    overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
 impl SequentialTask {
@@ -72,9 +79,9 @@ impl SequentialTask {
 
 #[async_trait]
 impl Task for SequentialTask {
-    async fn execute(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
+    async fn execute_inner(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
         for task in self.tasks.iter() {
-            match (&self.policy, task.execute().await) {
+            match (&self.sequential_policy, task.execute_inner().await) {
                 (SequentialTaskPolicy::RunUntilFailure, Err(res)) => {
                     return Err(res)
                 }
@@ -96,12 +103,20 @@ impl Task for SequentialTask {
         self.runs
     }
 
-    async fn maximum_runs(&self) -> Option<u64> {
+    async fn maximum_runs(&self) -> Option<NonZeroU64> {
         self.max_runs
+    }
+
+    async fn set_maximum_runs(&mut self, max_runs: NonZeroU64) {
+        self.max_runs = Some(max_runs)
     }
 
     async fn set_total_runs(&mut self, runs: u64) {
         self.runs = runs;
+    }
+
+    async fn set_last_execution(&mut self, exec: DateTime<Local>) {
+        self.last_execution.swap(Arc::new(exec));
     }
 
     async fn get_debug_label(&self) -> String {
@@ -110,5 +125,9 @@ impl Task for SequentialTask {
 
     async fn last_execution(&self) -> DateTime<Local> {
         *self.last_execution.load().clone()
+    }
+
+    async fn overlap_policy(&self) -> Arc<dyn OverlapStrategy> {
+        self.overlap_policy.clone()
     }
 }
