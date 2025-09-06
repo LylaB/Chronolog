@@ -33,6 +33,38 @@ impl<T: Task> From<RetriableTaskConfig<T>> for RetriableTask<T> {
     }
 }
 
+/// Represents a **retriable task** which wraps a task. This task type acts as a
+/// **wrapper node** within the task hierarchy, providing a retry mechanism for execution.
+///
+/// ### Behavior
+/// - Executes the **wrapped task**.
+/// - If the task fails, it re-executes it again after a specified delay (or instantaneous).
+/// - Repeat the process for a specified number of retries til the task succeeds
+///
+/// # Example
+/// ```ignore
+/// use std::time::Duration;
+/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog::task::fallback::FallbackTask;
+/// use chronolog::task::execution::ExecutionTask;
+///
+/// let exec_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
+///     .func(|_metadata| async {
+///         println!("Trying primary task...");
+///         Err::<(), ()>(())
+///     })
+///     .build();
+///
+/// let retriable_task = RetriableTask::builder()
+///     .task(exec_task)
+///     .retries(3)
+///     .delay(Duration::from_secs(0))
+///     .build();
+///
+/// CHRONOLOG_SCHEDULER.register(retriable_task).await;
+/// ```
 pub struct RetriableTask<T: Task> {
     task: T,
     retries: NonZeroU32,
