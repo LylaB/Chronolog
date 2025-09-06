@@ -27,7 +27,7 @@ use crate::schedule::Schedule;
 ///
 /// # See also
 /// - [`Schedule`] — the trait implemented by this type
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Copy)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Copy, Default)]
 pub struct ScheduleInterval(pub(crate) TimeDelta);
 
 impl ScheduleInterval {
