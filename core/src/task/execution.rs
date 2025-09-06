@@ -1,9 +1,6 @@
 use std::error::Error;
 use crate::task::{Arc};
-use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::num::NonZeroU64;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -17,12 +14,11 @@ use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 static EXECUTION_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
 #[derive(TypedBuilder)]
-#[builder(build_method(into = ExecutionTask<E, F>))]
-pub struct ExecutionTaskConfig<E, F>
+#[builder(build_method(into = ExecutionTask<F>))]
+pub struct ExecutionTaskConfig<F>
 where
-    ExecutionTask<E, F>: From<ExecutionTaskConfig<E, F>>,
-    E: Send + Sync + Debug + 'static,
-    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
+    F: Send + Sync + 'static,
+    ExecutionTask<F>: From<ExecutionTaskConfig<F>>,
 {
     func: F,
     
@@ -35,19 +31,16 @@ where
     #[builder(default, setter(strip_option))]
     debug_label: Option<String>,
 
-    #[builder(default, setter(skip))]
-    _marker: PhantomData<E>,
-
     #[builder(default = Arc::new(SequentialOverlapPolicy), setter(transform = |s: impl OverlapStrategy + 'static| Arc::new(s) as Arc<dyn OverlapStrategy>))]
     overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
-impl<E, F> From<ExecutionTaskConfig<E, F>> for ExecutionTask<E, F>
+impl<F, Fut> From<ExecutionTaskConfig<F>> for ExecutionTask<F>
 where
-    E: Send + Sync + Debug + 'static,
-    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
+    Fut: Future<Output = Result<(), Arc<dyn Error + Send + Sync>>> + Send,
+    F: Fn(ExecutionTaskMetadata) -> Fut + Send + Sync
 {
-    fn from(config: ExecutionTaskConfig<E, F>) -> Self {
+    fn from(config: ExecutionTaskConfig<F>) -> Self {
         let creation_time = Local::now();
         let debug_label = if let Some(debug_label) = config.debug_label {
             debug_label
@@ -65,45 +58,97 @@ where
                 overlap_policy: config.overlap_policy,
             },
             last_execution: ArcSwap::from_pointee(creation_time),
-            _marker: PhantomData::default()
         }
     }
 }
 
-pub struct ExecutionTask<E, F>
-where
-    E: Send + Sync + Debug + 'static,
-    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
+/// Represents a **task** that directly hosts and executes a function. This task type acts as
+/// a **leaf node** within the task hierarchy. Its primary role is to serve as the final unit of
+/// execution in a task workflow, as it only encapsulates a single function / future to be executed,
+/// no further tasks can be chained or derived from it
+///
+/// ### Example
+/// ```ignore
+/// use std::time::Duration;
+/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog::task::execution::ExecutionTask;
+///
+/// let task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
+///     .func(|_metadata| async {
+///         println!("Hello from an execution task!");
+///         Ok::<(), ()>(())
+///     })
+///     .build();
+///
+/// CHRONOLOG_SCHEDULER.register(task).await;
+/// ```
+pub struct ExecutionTask<F>
+where F: Send + Sync + 'static
 {
     func: F,
     metadata: ExecutionTaskMetadata,
     last_execution: ArcSwap<DateTime<Local>>,
-    _marker: PhantomData<E>
 }
 
+/// Represents task-related metadata, it is used internally by the execution task to hold the metadata,
+/// and the metadata is also exposed to the function which the execution task holds. By itself, it does
+/// not allow any write operations, rather only reading its contents (internally the metadata is modified)
 pub struct ExecutionTaskMetadata {
-    pub schedule: Arc<dyn Schedule>,
-    pub runs: u64,
-    pub max_runs: Option<NonZeroU64>,
-    pub debug_label: String,
-    pub overlap_policy: Arc<dyn OverlapStrategy>
+    schedule: Arc<dyn Schedule>,
+    runs: u64,
+    max_runs: Option<NonZeroU64>,
+    debug_label: String,
+    overlap_policy: Arc<dyn OverlapStrategy>
 }
 
-impl<E, F> ExecutionTask<E, F>
+impl ExecutionTaskMetadata {
+    /// Gets the schedule
+    pub fn schedule(&self) -> Arc<dyn Schedule> {
+        self.schedule.clone()
+    }
+
+    /// Gets the number of runs
+    pub fn runs(&self) -> u64 {
+        self.runs
+    }
+
+    /// Gets the maximum number of runs
+    pub fn max_runs(&self) -> Option<NonZeroU64> {
+        self.max_runs
+    }
+
+    /// Gets the human-readable debug label of the task
+    pub fn debug_label(&self) -> &str {
+        self.debug_label.as_str()
+    }
+
+    /// Gets the overlap task policy / strategy
+    pub fn overlap_policy(&self) -> Arc<dyn OverlapStrategy> {
+        self.overlap_policy.clone()
+    }
+}
+
+impl<F, Fut> ExecutionTask<F>
 where
-    E: Send + Sync + Debug + 'static,
-    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
+    Fut: Future<Output = Result<(), Arc<dyn Error + Send + Sync>>> + Send,
+    F: Fn(ExecutionTaskMetadata) -> Fut + Send + Sync
 {
-    pub fn builder() -> ExecutionTaskConfigBuilder<E, F> {
+    /// Construct a builder for the ExecutionTask, this is synonymous to:
+    /// ```ignore
+    /// ExecutionTaskConfig::builder()
+    /// ```
+    pub fn builder() -> ExecutionTaskConfigBuilder<F> {
         ExecutionTaskConfig::builder()
     }
 }
 
 #[async_trait]
-impl<E, F> Task for ExecutionTask<E, F>
+impl<F, Fut> Task for ExecutionTask<F>
 where
-    E: Send + Sync + Debug + 'static,
-    F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
+    Fut: Future<Output = Result<(), Arc<dyn Error + Send + Sync>>> + Send,
+    F: Fn(ExecutionTaskMetadata) -> Fut + Send + Sync
 {
     async fn execute_inner(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
         let cloned_metadata = ExecutionTaskMetadata {
