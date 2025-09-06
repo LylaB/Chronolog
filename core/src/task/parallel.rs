@@ -8,7 +8,7 @@ use chrono::{DateTime, Local};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use typed_builder::TypedBuilder;
-use crate::task::{Schedule, Task};
+use crate::task::{Schedule, Task, sequential::SequentialTask};
 use once_cell::sync::Lazy;
 use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 
@@ -64,6 +64,53 @@ impl From<ParallelTaskConfig> for ParallelTask {
     }
 }
 
+/// Represents a **parallel task** which wraps multiple tasks to execute at the same time. This task type
+/// acts as a **composite node** within the task hierarchy, facilitating a way to represent multiple tasks
+/// which have same timings. This is much more optimized than dispatching those tasks on the scheduler
+/// independently, each individual task's schedule is ignored, instead, a group schedule is used. The
+/// order of execution is unordered, and thus one task may be executed sooner than another, in this case,
+/// it is advised to use [`SequentialTask`] as opposed to [`ParallelTask`]
+///
+/// # Example
+/// ```ignore
+/// use std::sync::Arc;
+/// use std::time::Duration;
+/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog::task::fallback::FallbackTask;
+/// use chronolog::task::execution::ExecutionTask;
+/// use chronolog::task::parallel::ParallelTask;
+///
+/// let primary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::default())
+///     .func(|_metadata| async {
+///         println!("Executing Primary Task");
+///         Ok(())
+///     })
+///     .build();
+///
+/// let secondary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::default())
+///     .func(|_metadata| async {
+///         println!("Executing Secondary Task");
+///         Ok(())
+///     })
+///     .build();
+///
+/// let tertiary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::default())
+///     .func(|_metadata| async {
+///         println!("Executing Tertiary Task");
+///         Err(())
+///     })
+///     .build();
+///
+/// let parallel_task = ParallelTask::builder()
+///     .tasks(vec![Arc::new(primary_task), Arc::new(secondary_task), Arc::new(tertiary_task)])
+///     .build();
+///
+/// CHRONOLOG_SCHEDULER.register(parallel_task).await;
+/// ```
 pub struct ParallelTask {
     tasks: Vec<Arc<dyn Task>>,
     schedule: Arc<dyn Schedule>,
