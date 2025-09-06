@@ -109,6 +109,6 @@ pub trait Task: Send + Sync {
     /// Gets the last time the task was executed
     async fn last_execution(&self) -> DateTime<Local>;
 
-    /// Gets the overlapping policy / stradegy used by the task
+    /// Gets the overlapping policy / strategy used by the task
     async fn overlap_policy(&self) -> Arc<dyn OverlapStrategy>;
 }
