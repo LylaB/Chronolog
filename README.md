@@ -41,6 +41,9 @@ its core.
 - **🔧 Developer-Friendly:** Clear API, intuitive task registration, vast documentation, you name it. No complications, 
 no trickery, what you write in code is what you will get in the production environment
 <br /><br />
+- **⏰ Millisecond Precision:** Chronolog is also designed to be millisecond precise, which makes it very practical for
+frequent scheduled tasks, it maintains this precision even when clogged by multiple tasks
+<br /> <br />
 - **📦 Tiny But Mighty** Tired of large sized packages, taking forever to compile, consuming disk space and so on? We too,
 as such, Chronolog is tiny about **~1MB** in size
 <img align="center" src="assets/Chronolog Divider.png" />
