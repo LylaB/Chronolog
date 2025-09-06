@@ -15,13 +15,6 @@ use crate::errors::ChronologErrors;
 use crate::overlap::OverlapStrategy;
 use crate::schedule::Schedule;
 
-#[macro_export]
-macro_rules! task_fn {
-    ($metadata:ident => $body:block) => {
-        |$metadata| Box::pin(async move $body)
-    };
-}
-
 /// [`Task`] represents a unit of work that can be scheduled and executed by a [`Scheduler`].
 ///
 /// Each task encapsulates the following:
