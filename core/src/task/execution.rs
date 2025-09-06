@@ -79,7 +79,7 @@ where
 ///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
 ///     .func(|_metadata| async {
 ///         println!("Hello from an execution task!");
-///         Ok::<(), ()>(())
+///         Ok(())
 ///     })
 ///     .build();
 ///
