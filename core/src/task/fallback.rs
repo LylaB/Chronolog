@@ -9,14 +9,15 @@ use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 use crate::task::{Schedule, Task};
 
 #[derive(TypedBuilder)]
-#[builder(build_method(into = FallbackTask<T>))]
-pub struct FallbackTaskConfig<T>
+#[builder(build_method(into = FallbackTask<T, T2>))]
+pub struct FallbackTaskConfig<T, T2>
 where
     T: Task,
-    FallbackTask<T>: From<FallbackTaskConfig<T>>,
+    T2: Task,
+    FallbackTask<T, T2>: From<FallbackTaskConfig<T, T2>>,
 {
-    task: T,
-    fallback_task: T,
+    primary: T,
+    fallback_task: T2,
 
     #[builder(default = Arc::new(SequentialOverlapPolicy))]
     overlap_policy: Arc<dyn OverlapStrategy>,
@@ -25,11 +26,11 @@ where
     max_runs: Option<NonZeroU64>,
 }
 
-impl<T: Task> From<FallbackTaskConfig<T>> for FallbackTask<T> {
-    fn from(config: FallbackTaskConfig<T>) -> Self {
+impl<T: Task, T2: Task> From<FallbackTaskConfig<T, T2>> for FallbackTask<T, T2> {
+    fn from(config: FallbackTaskConfig<T, T2>) -> Self {
         let creation_time = Local::now();
         Self {
-            task: config.task,
+            task: config.primary,
             fallback: config.fallback_task,
             max_runs: config.max_runs,
             last_execution: ArcSwap::from_pointee(creation_time),
@@ -38,22 +39,61 @@ impl<T: Task> From<FallbackTaskConfig<T>> for FallbackTask<T> {
     }
 }
 
-pub struct FallbackTask<T: Task> {
+/// Represents a **fallback task** which wraps two other tasks. This task type acts as a
+/// **composite node** within the task hierarchy, providing a failover mechanism for execution.
+///
+/// ### Behavior
+/// - Executes the **primary task** first.
+/// - If the primary task completes successfully, the fallback task is **skipped**.
+/// - If the primary task **fails**, the **secondary task** is executed as a fallback.
+///
+/// # Example
+/// ```ignore
+/// use std::time::Duration;
+/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog::task::fallback::FallbackTask;
+/// use chronolog::task::execution::ExecutionTask;
+///
+/// let primary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
+///     .func(|_metadata| async {
+///         println!("Trying primary task...");
+///         Err::<(), ()>(())
+///     })
+///     .build();
+///
+/// let secondary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
+///     .func(|_metadata| async {
+///         println!("Primary failed, running fallback task!");
+///         Ok::<(), ()>(())
+///     })
+///     .build();
+///
+/// let fallback_task = FallbackTask::builder()
+///     .primary(primary_task)
+///     .fallback(secondary_task)
+///     .build();
+///
+/// CHRONOLOG_SCHEDULER.register(fallback_task).await;
+/// ```
+pub struct FallbackTask<T: Task, T2: Task> {
     task: T,
-    fallback: T,
+    fallback: T2,
     last_execution: ArcSwap<DateTime<Local>>,
     max_runs: Option<NonZeroU64>,
     overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
-impl<T: Task> FallbackTask<T> {
-    pub fn builder() -> FallbackTaskConfigBuilder<T> {
+impl<T: Task, T2: Task> FallbackTask<T, T2> {
+    pub fn builder() -> FallbackTaskConfigBuilder<T, T2> {
         FallbackTaskConfig::builder()
     }
 }
 
 #[async_trait]
-impl<T: Task> Task for FallbackTask<T> {
+impl<T: Task, T2: Task> Task for FallbackTask<T, T2> {
     async fn execute_inner(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
         let result = match self.task.execute_inner().await {
             Err(_) => self.fallback.execute_inner().await,
