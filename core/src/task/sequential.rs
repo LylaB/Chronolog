@@ -9,6 +9,7 @@ use typed_builder::TypedBuilder;
 use crate::task::{Schedule, Task};
 use once_cell::sync::Lazy;
 use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
+use crate::task::parallel::ParallelTask;
 
 static SEQUENTIAL_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
@@ -60,6 +61,53 @@ impl From<SequentialTaskConfig> for SequentialTask  {
     }
 }
 
+/// Represents a **sequential task** which wraps multiple tasks to execute at the same time in a sequential
+/// manner. This task type acts as a **composite node** within the task hierarchy, facilitating a way to
+/// represent multiple tasks which have same timings but depend on each previous task finishing. The
+/// order of execution is ordered, and thus why its sequential, in the case where execution order
+/// does not matter, tasks do not require sequential execution, it is advised to use [`ParallelTask`] 
+/// as opposed to [`SequentialTask`]
+///
+/// # Example
+/// ```ignore
+/// use std::sync::Arc;
+/// use std::time::Duration;
+/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog::task::fallback::FallbackTask;
+/// use chronolog::task::execution::ExecutionTask;
+/// use chronolog::task::parallel::SequentialTask;
+///
+/// let primary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::default())
+///     .func(|_metadata| async {
+///         println!("Executing Primary Task");
+///         Ok(())
+///     })
+///     .build();
+///
+/// let secondary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::default())
+///     .func(|_metadata| async {
+///         println!("Executing Secondary Task");
+///         Ok(())
+///     })
+///     .build();
+///
+/// let tertiary_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::default())
+///     .func(|_metadata| async {
+///         println!("Executing Tertiary Task");
+///         Err(())
+///     })
+///     .build();
+///
+/// let sequential_task = SequentialTask::builder()
+///     .tasks(vec![Arc::new(primary_task), Arc::new(secondary_task), Arc::new(tertiary_task)])
+///     .build();
+///
+/// CHRONOLOG_SCHEDULER.register(sequential_task).await;
+/// ```
 pub struct SequentialTask {
     tasks: Vec<Arc<dyn Task>>,
     schedule: Arc<dyn Schedule>,
