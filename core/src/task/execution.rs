@@ -12,7 +12,7 @@ use typed_builder::TypedBuilder;
 use crate::errors::ChronologErrors;
 use crate::task::{Schedule, Task};
 use once_cell::sync::Lazy;
-use crate::overlap::{OverlapStrategy, RerunAfterCompletion};
+use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 
 static EXECUTION_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
@@ -25,7 +25,9 @@ where
     F: (Fn(ExecutionTaskMetadata) -> Pin<Box<dyn Future<Output = Result<(), E>> + Send>>) + Send + Sync
 {
     func: F,
-    schedule: Schedule,
+    
+    #[builder(setter(transform = |s: impl Schedule + 'static| Arc::new(s) as Arc<dyn Schedule>))]
+    schedule: Arc<dyn Schedule>,
 
     #[builder(default, setter(strip_option))]
     max_runs: Option<NonZeroU64>,
@@ -36,7 +38,7 @@ where
     #[builder(default, setter(skip))]
     _marker: PhantomData<E>,
 
-    #[builder(default = Arc::new(RerunAfterCompletion))]
+    #[builder(default = Arc::new(SequentialOverlapPolicy), setter(transform = |s: impl OverlapStrategy + 'static| Arc::new(s) as Arc<dyn OverlapStrategy>))]
     overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
@@ -80,7 +82,7 @@ where
 }
 
 pub struct ExecutionTaskMetadata {
-    pub schedule: Schedule,
+    pub schedule: Arc<dyn Schedule>,
     pub runs: u64,
     pub max_runs: Option<NonZeroU64>,
     pub debug_label: String,
@@ -121,8 +123,8 @@ where
         Ok(())
     }
 
-    async fn get_schedule(&self) -> &Schedule {
-        &self.metadata.schedule
+    async fn get_schedule(&self) -> Arc<dyn Schedule> {
+        self.metadata.schedule.clone()
     }
 
     async fn total_runs(&self) -> u64 {

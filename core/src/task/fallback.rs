@@ -5,7 +5,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use typed_builder::TypedBuilder;
-use crate::overlap::{OverlapStrategy, RerunAfterCompletion};
+use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 use crate::task::{Schedule, Task};
 
 #[derive(TypedBuilder)]
@@ -18,7 +18,7 @@ where
     task: T,
     fallback_task: T,
 
-    #[builder(default = Arc::new(RerunAfterCompletion))]
+    #[builder(default = Arc::new(SequentialOverlapPolicy))]
     overlap_policy: Arc<dyn OverlapStrategy>,
 
     #[builder(default, setter(strip_option))]
@@ -63,7 +63,7 @@ impl<T: Task> Task for FallbackTask<T> {
         result
     }
 
-    async fn get_schedule(&self) -> &Schedule {
+    async fn get_schedule(&self) -> Arc<dyn Schedule> {
         self.task.get_schedule().await
     }
 

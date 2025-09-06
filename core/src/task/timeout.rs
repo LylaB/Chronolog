@@ -54,7 +54,7 @@ impl<T: Task> Task for TimeoutTask<T> {
             ))))
     }
 
-    async fn get_schedule(&self) -> &Schedule {
+    async fn get_schedule(&self) -> Arc<dyn Schedule> {
         self.task.get_schedule().await
     }
 

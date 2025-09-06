@@ -8,7 +8,7 @@ use chrono::{DateTime, Local};
 use typed_builder::TypedBuilder;
 use crate::task::{Schedule, Task};
 use once_cell::sync::Lazy;
-use crate::overlap::{OverlapStrategy, RerunAfterCompletion};
+use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 
 static SEQUENTIAL_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
@@ -23,7 +23,7 @@ pub enum SequentialTaskPolicy {
 pub struct SequentialTaskConfig
 where SequentialTask: From<SequentialTaskConfig> {
     tasks: Vec<Arc<dyn Task>>,
-    schedule: Schedule,
+    schedule: Arc<dyn Schedule>,
 
     #[builder(default, setter(strip_option))]
     max_runs: Option<NonZeroU64>,
@@ -34,7 +34,7 @@ where SequentialTask: From<SequentialTaskConfig> {
     #[builder(default = SequentialTaskPolicy::RunUntilFailure)]
     sequential_policy: SequentialTaskPolicy,
 
-    #[builder(default = Arc::new(RerunAfterCompletion))]
+    #[builder(default = Arc::new(SequentialOverlapPolicy), setter(transform = |s: impl OverlapStrategy + 'static| Arc::new(s) as Arc<dyn OverlapStrategy>))]
     overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
@@ -62,7 +62,7 @@ impl From<SequentialTaskConfig> for SequentialTask  {
 
 pub struct SequentialTask {
     tasks: Vec<Arc<dyn Task>>,
-    schedule: Schedule,
+    schedule: Arc<dyn Schedule>,
     runs: u64,
     max_runs: Option<NonZeroU64>,
     debug_label: String,
@@ -95,8 +95,8 @@ impl Task for SequentialTask {
         Ok(())
     }
 
-    async fn get_schedule(&self) -> &Schedule {
-        &self.schedule
+    async fn get_schedule(&self) -> Arc<dyn Schedule> {
+        self.schedule.clone()
     }
 
     async fn total_runs(&self) -> u64 {

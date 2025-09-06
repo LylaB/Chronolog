@@ -10,7 +10,7 @@ use futures::StreamExt;
 use typed_builder::TypedBuilder;
 use crate::task::{Schedule, Task};
 use once_cell::sync::Lazy;
-use crate::overlap::{OverlapStrategy, RerunAfterCompletion};
+use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
 
 static PARALLEL_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
@@ -25,7 +25,9 @@ pub enum ParallelTaskPolicy {
 pub struct ParallelTaskConfig
 where ParallelTask: From<ParallelTaskConfig> {
     tasks: Vec<Arc<dyn Task>>,
-    schedule: Schedule,
+
+    #[builder(setter(transform = |s: impl Schedule + 'static| Arc::new(s) as Arc<dyn Schedule>))]
+    schedule: Arc<dyn Schedule>,
 
     #[builder(default, setter(strip_option))]
     max_runs: Option<NonZeroU64>,
@@ -36,7 +38,7 @@ where ParallelTask: From<ParallelTaskConfig> {
     #[builder(default = ParallelTaskPolicy::RunUntilFailure)]
     policy: ParallelTaskPolicy,
 
-    #[builder(default = Arc::new(RerunAfterCompletion))]
+    #[builder(default = Arc::new(SequentialOverlapPolicy), setter(transform = |s: impl OverlapStrategy + 'static| Arc::new(s) as Arc<dyn OverlapStrategy>))]
     overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
@@ -64,7 +66,7 @@ impl From<ParallelTaskConfig> for ParallelTask {
 
 pub struct ParallelTask {
     tasks: Vec<Arc<dyn Task>>,
-    schedule: Schedule,
+    schedule: Arc<dyn Schedule>,
     runs: u64,
     max_runs: Option<NonZeroU64>,
     debug_label: String,
@@ -102,8 +104,8 @@ impl Task for ParallelTask {
         Ok(())
     }
 
-    async fn get_schedule(&self) -> &Schedule {
-        &self.schedule
+    async fn get_schedule(&self) -> Arc<dyn Schedule> {
+        self.schedule.clone()
     }
 
     async fn total_runs(&self) -> u64 {
