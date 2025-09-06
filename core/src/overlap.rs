@@ -35,16 +35,29 @@ impl<'a> OverlapContext<'a> {
 
 #[async_trait::async_trait]
 pub trait OverlapStrategy: Send + Sync {
-    async fn execute(&self, task_entry: &OverlapContext<'_>);
+    async fn handle(&self, task_entry: &OverlapContext<'_>);
 }
 
-pub struct RerunAfterCompletion;
+pub struct SequentialOverlapPolicy;
 #[async_trait::async_trait]
-impl OverlapStrategy for RerunAfterCompletion {
-    async fn execute(&self, ctx: &OverlapContext<'_>) {
+impl OverlapStrategy for SequentialOverlapPolicy {
+    async fn handle(&self, ctx: &OverlapContext<'_>) {
         let task = ctx.get_task();
         let lock = task.lock().await;
         let token = Arc::new(CancellationToken::new());
         lock.process(token).await.unwrap();
+    }
+}
+
+pub struct ParallelOverlapPolicy;
+#[async_trait::async_trait]
+impl OverlapStrategy for ParallelOverlapPolicy {
+    async fn handle(&self, ctx: &OverlapContext<'_>) {
+        let task = ctx.get_task();
+        let token = Arc::new(CancellationToken::new());
+        tokio::spawn(async move {
+            let lock = task.lock().await;
+            lock.process(token).await.unwrap()
+        });
     }
 }
