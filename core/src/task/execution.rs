@@ -15,10 +15,11 @@ static EXECUTION_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::
 
 #[derive(TypedBuilder)]
 #[builder(build_method(into = ExecutionTask<F>))]
-pub struct ExecutionTaskConfig<F>
+pub struct ExecutionTaskConfig<F, Fut>
 where
-    F: Send + Sync + 'static,
-    ExecutionTask<F>: From<ExecutionTaskConfig<F>>,
+    F: Fn(ExecutionTaskMetadata) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), Arc<dyn Error + Send + Sync>>> + Send,
+    ExecutionTask<F>: From<ExecutionTaskConfig<F, Fut>>,
 {
     func: F,
     
@@ -35,12 +36,12 @@ where
     overlap_policy: Arc<dyn OverlapStrategy>,
 }
 
-impl<F, Fut> From<ExecutionTaskConfig<F>> for ExecutionTask<F>
+impl<F, Fut> From<ExecutionTaskConfig<F, Fut>> for ExecutionTask<F>
 where
     Fut: Future<Output = Result<(), Arc<dyn Error + Send + Sync>>> + Send,
     F: Fn(ExecutionTaskMetadata) -> Fut + Send + Sync
 {
-    fn from(config: ExecutionTaskConfig<F>) -> Self {
+    fn from(config: ExecutionTaskConfig<F, Fut>) -> Self {
         let creation_time = Local::now();
         let debug_label = if let Some(debug_label) = config.debug_label {
             debug_label
@@ -85,7 +86,7 @@ where
 /// CHRONOLOG_SCHEDULER.register(task).await;
 /// ```
 pub struct ExecutionTask<F>
-where F: Send + Sync + 'static
+where F: Send + Sync
 {
     func: F,
     metadata: ExecutionTaskMetadata,
@@ -135,11 +136,12 @@ where
     Fut: Future<Output = Result<(), Arc<dyn Error + Send + Sync>>> + Send,
     F: Fn(ExecutionTaskMetadata) -> Fut + Send + Sync
 {
-    /// Construct a builder for the ExecutionTask, this is synonymous to:
+    /// Construct a builder for the ExecutionTask, this is a convenience method and is
+    /// synonymous to:
     /// ```ignore
-    /// ExecutionTaskConfig::builder()
+    /// ExecutionTaskConfig::<F, _>::builder()
     /// ```
-    pub fn builder() -> ExecutionTaskConfigBuilder<F> {
+    pub fn builder() -> ExecutionTaskConfigBuilder<F, Fut> {
         ExecutionTaskConfig::builder()
     }
 }
