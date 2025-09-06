@@ -31,6 +31,38 @@ impl<T: Task> From<TimeoutTaskConfig<T>> for TimeoutTask<T> {
     }
 }
 
+/// Represents a **timeout task** which wraps a task. This task type acts as a
+/// **wrapper node** within the task hierarchy, providing a timeout mechanism for execution.
+///
+/// ### Behavior
+/// - Executes the **wrapped task**.
+/// - Tracks a timer while the task executes.
+/// - If the task executes longer than a specified duration, an error 
+/// is thrown and the task is aborted
+///
+/// # Example
+/// ```ignore
+/// use std::time::Duration;
+/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog::task::fallback::FallbackTask;
+/// use chronolog::task::execution::ExecutionTask;
+///
+/// let exec_task = ExecutionTask::builder()
+///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
+///     .func(|_metadata| async {
+///         println!("Trying primary task...");
+///         Err::<(), ()>(())
+///     })
+///     .build();
+///
+/// let retriable_task = TimeoutTask::builder()
+///     .task(exec_task)
+///     .max_duration(Duration::from_secs(3))
+///     .build();
+///
+/// CHRONOLOG_SCHEDULER.register(retriable_task).await;
+/// ```
 pub struct TimeoutTask<T: Task> {
     task: T,
     max_duration: Duration,
