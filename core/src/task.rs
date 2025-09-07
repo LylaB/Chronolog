@@ -5,6 +5,13 @@ pub mod timeout;
 pub mod fallback;
 pub mod parallel;
 
+pub use execution::ExecutionTask;
+pub use sequential::SequentialTask;
+pub use parallel::ParallelTask;
+pub use timeout::TimeoutTask;
+pub use fallback::FallbackTask;
+pub use retry::RetriableTask;
+
 use std::error::Error;
 use std::num::{NonZeroU64};
 use std::sync::Arc;
