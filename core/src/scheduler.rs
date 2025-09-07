@@ -121,50 +121,55 @@ impl Scheduler for ChronologScheduler {
         let this = self.clone();
         self.task_process.store(Some(Arc::new(
             tokio::spawn(async move {
-                let mut heap = this.earliest_sorted.lock().await;
-                while let Some(Reverse(task_entry)) = heap.pop() {
-                    if task_entry.marked_for_delete.load(std::sync::atomic::Ordering::Relaxed) {
-                        continue;
-                    }
-                    let (schedule, last_exec) = {
-                        let loaded_time = task_entry.target_time.load();
-                        let task_lock = task_entry.task.lock().await;
-                        let now_chrono = Local::now();
-                        let now_tokio = Instant::now();
-                        let delta = &loaded_time.signed_duration_since(now_chrono);
-                        let target_time = if delta.num_milliseconds() <= 0 {
-                            now_tokio
-                        } else {
-                            now_tokio + Duration::from_millis(delta.num_milliseconds() as u64)
+                loop {
+                    let mut heap = this.earliest_sorted.lock().await;
+                    if let Some(Reverse(task_entry)) = heap.pop() {
+                        drop(heap);
+                        if task_entry.marked_for_delete.load(std::sync::atomic::Ordering::Relaxed) {
+                            continue;
+                        }
+                        let (schedule, last_exec) = {
+                            let loaded_time = task_entry.target_time.load();
+                            let task_lock = task_entry.task.lock().await;
+                            let now_chrono = Local::now();
+                            let now_tokio = Instant::now();
+                            let delta = &loaded_time.signed_duration_since(now_chrono);
+                            let target_time = if delta.num_milliseconds() <= 0 {
+                                now_tokio
+                            } else {
+                                now_tokio + Duration::from_millis(delta.num_milliseconds() as u64)
+                            };
+                            drop(task_lock);
+                            sleep_until(target_time).await;
+                            let mut task_lock = task_entry.task.lock().await;
+                            let runs = task_lock.total_runs().await + 1;
+                            task_lock.set_total_runs(runs).await;
+                            let last_exec = Local::now();
+                            task_lock.set_last_execution(last_exec).await;
+                            drop(task_lock);
+                            let task_lock = task_entry.task.lock().await;
+                            let max_runs = task_lock.maximum_runs().await;
+                            let schedule = task_lock.get_schedule().await.clone();
+                            let policy = task_lock.overlap_policy().await;
+                            drop(task_lock);
+                            dbg!("TEST START");
+                            policy.handle(&OverlapContext(&*task_entry)).await;
+                            dbg!("TEST END");
+                            match max_runs {
+                                Some(m) if runs == m.get() => {continue},
+                                _ => {}
+                            };
+                            (schedule, last_exec)
                         };
-                        drop(task_lock);
-                        sleep_until(target_time).await;
-                        let mut task_lock = task_entry.task.lock().await;
-                        let runs = task_lock.total_runs().await + 1;
-                        task_lock.set_total_runs(runs).await;
-                        let last_exec = Local::now();
-                        task_lock.set_last_execution(last_exec).await;
-                        drop(task_lock);
-                        let task_lock = task_entry.task.lock().await;
-                        let max_runs = task_lock.maximum_runs().await;
-                        let schedule = task_lock.get_schedule().await.clone();
-                        let policy = task_lock.overlap_policy().await;
-                        drop(task_lock);
-                        dbg!("TEST START");
-                        policy.handle(&OverlapContext(&*task_entry)).await;
-                        dbg!("TEST END");
-                        match max_runs {
-                            Some(m) if runs == m.get() => {continue},
-                            _ => {}
-                        };
-                        (schedule, last_exec)
-                    };
-                    let mut future_time = schedule.next_after(last_exec).unwrap();
-                    if (future_time - last_exec).subsec_millis() < 5 {
-                        future_time = schedule.next_after(future_time + chrono::Duration::milliseconds(5)).unwrap();
+                        let mut future_time = schedule.next_after(last_exec).unwrap();
+                        if (future_time - last_exec).subsec_millis() < 5 {
+                            future_time = schedule.next_after(future_time + chrono::Duration::milliseconds(5)).unwrap();
+                        }
+                        task_entry.target_time.store(Arc::new(future_time));
+                        let mut heap = this.earliest_sorted.lock().await;
+                        heap.push(Reverse(task_entry));
+                        drop(heap);
                     }
-                    task_entry.target_time.store(Arc::new(future_time));
-                    heap.push(Reverse(task_entry));
                 }
             })
         )));
