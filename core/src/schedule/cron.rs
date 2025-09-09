@@ -40,7 +40,7 @@ impl ScheduleCron {
 }
 
 impl Schedule for ScheduleCron {
-    fn next_after(&self, time: DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
-        Ok(cron_parser::parse(&*self.0, &time).unwrap())
+    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+        Ok(cron_parser::parse(&*self.0, time).unwrap())
     }
 }
