@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Local, TimeDelta};
@@ -41,7 +42,7 @@ impl ScheduleInterval {
 }
 
 impl Schedule for ScheduleInterval {
-    fn next_after(&self, time: DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
-        Ok(time + self.0)
+    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+        Ok(time.add(self.0))
     }
 }
