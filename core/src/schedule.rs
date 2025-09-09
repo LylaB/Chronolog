@@ -28,5 +28,5 @@ use chrono::{DateTime, Local};
 pub trait Schedule: Send + Sync {
     /// Calculates the future time to execute, this may return an error in the process if unable due
     /// to any reason, read more on the trait implementation's documentation to learn more
-    fn next_after(&self, time: DateTime<Local>) -> Result<DateTime<Local>, Arc<dyn Error>>;
+    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<dyn Error>>;
 }
