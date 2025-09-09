@@ -1,64 +1,13 @@
-use std::error::Error;
-use std::num::NonZeroU64;
+use std::fmt::Debug;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use chrono::{DateTime, Local};
-use typed_builder::TypedBuilder;
-use crate::task::{Schedule, Task};
-use once_cell::sync::Lazy;
-use crate::overlap::{OverlapStrategy, SequentialOverlapPolicy};
+use crate::task::{TaskFrame, TaskMetadata};
 use crate::task::parallel::ParallelTask;
-
-static SEQUENTIAL_TASK_CREATION_COUNT: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
 pub enum SequentialTaskPolicy {
     RunSilenceFailures,
     RunUntilSuccess,
     RunUntilFailure,
-}
-
-#[derive(TypedBuilder)]
-#[builder(build_method(into = SequentialTask))]
-pub struct SequentialTaskConfig
-where SequentialTask: From<SequentialTaskConfig> {
-    tasks: Vec<Arc<dyn Task>>,
-    schedule: Arc<dyn Schedule>,
-
-    #[builder(default, setter(strip_option))]
-    max_runs: Option<NonZeroU64>,
-
-    #[builder(default, setter(strip_option))]
-    debug_label: Option<String>,
-
-    #[builder(default = SequentialTaskPolicy::RunUntilFailure)]
-    sequential_policy: SequentialTaskPolicy,
-
-    #[builder(default = Arc::new(SequentialOverlapPolicy), setter(transform = |s: impl OverlapStrategy + 'static| Arc::new(s) as Arc<dyn OverlapStrategy>))]
-    overlap_policy: Arc<dyn OverlapStrategy>,
-}
-
-impl From<SequentialTaskConfig> for SequentialTask  {
-    fn from(config: SequentialTaskConfig) -> Self {
-        let creation_time = Local::now();
-        let debug_label = if let Some(debug_label) = config.debug_label {
-            debug_label
-        } else {
-            let num = SEQUENTIAL_TASK_CREATION_COUNT.fetch_add(1, Ordering::Relaxed);
-            format!("SequentialTask#{}", num)
-        };
-        Self {
-            tasks: config.tasks,
-            schedule: config.schedule,
-            runs: 0,
-            max_runs: config.max_runs,
-            debug_label,
-            sequential_policy: config.sequential_policy,
-            overlap_policy: config.overlap_policy,
-            last_execution: ArcSwap::new(Arc::new(creation_time)),
-        }
-    }
 }
 
 /// Represents a **sequential task** which wraps multiple tasks to execute at the same time in a sequential
@@ -108,28 +57,24 @@ impl From<SequentialTaskConfig> for SequentialTask  {
 ///
 /// CHRONOLOG_SCHEDULER.register(sequential_task).await;
 /// ```
-pub struct SequentialTask {
-    tasks: Vec<Arc<dyn Task>>,
-    schedule: Arc<dyn Schedule>,
-    runs: u64,
-    max_runs: Option<NonZeroU64>,
-    debug_label: String,
-    sequential_policy: SequentialTaskPolicy,
-    last_execution: ArcSwap<DateTime<Local>>,
-    overlap_policy: Arc<dyn OverlapStrategy>,
-}
+pub struct SequentialTask(Vec<Arc<dyn TaskFrame>>, SequentialTaskPolicy);
 
 impl SequentialTask {
-    pub fn builder() -> SequentialTaskConfigBuilder {
-        SequentialTaskConfig::builder()
+    pub fn new(tasks: Vec<Arc<dyn TaskFrame>>) -> SequentialTask {
+        SequentialTask(tasks, SequentialTaskPolicy::RunSilenceFailures)
+    }
+    
+    pub fn new_with(tasks: Vec<Arc<dyn TaskFrame>>, policy: SequentialTaskPolicy) -> SequentialTask {
+        SequentialTask(tasks, policy)
     }
 }
 
 #[async_trait]
-impl Task for SequentialTask {
-    async fn execute_inner(&self) -> Result<(), Arc<dyn Error + Send + Sync>> {
-        for task in self.tasks.iter() {
-            match (&self.sequential_policy, task.execute_inner().await) {
+impl TaskFrame for SequentialTask {
+    async fn execute(&self, metadata: &(dyn TaskMetadata + Send + Sync)) -> Result<(), Arc<dyn Debug + Send + Sync>> {
+        for task in self.0.iter() {
+            let result = task.execute(metadata).await;
+            match (&self.1, result) {
                 (SequentialTaskPolicy::RunUntilFailure, Err(res)) => {
                     return Err(res)
                 }
@@ -141,41 +86,5 @@ impl Task for SequentialTask {
             }
         }
         Ok(())
-    }
-
-    async fn get_schedule(&self) -> Arc<dyn Schedule> {
-        self.schedule.clone()
-    }
-
-    async fn total_runs(&self) -> u64 {
-        self.runs
-    }
-
-    async fn maximum_runs(&self) -> Option<NonZeroU64> {
-        self.max_runs
-    }
-
-    async fn set_maximum_runs(&mut self, max_runs: NonZeroU64) {
-        self.max_runs = Some(max_runs)
-    }
-
-    async fn set_total_runs(&mut self, runs: u64) {
-        self.runs = runs;
-    }
-
-    async fn set_last_execution(&mut self, exec: DateTime<Local>) {
-        self.last_execution.swap(Arc::new(exec));
-    }
-
-    async fn get_debug_label(&self) -> String {
-        self.debug_label.clone()
-    }
-
-    async fn last_execution(&self) -> DateTime<Local> {
-        *self.last_execution.load().clone()
-    }
-
-    async fn overlap_policy(&self) -> Arc<dyn OverlapStrategy> {
-        self.overlap_policy.clone()
     }
 }
