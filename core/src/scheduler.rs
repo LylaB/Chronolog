@@ -1,9 +1,9 @@
+use tokio::sync::RwLock;
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 use std::sync::{Arc};
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use arc_swap::{ArcSwap, ArcSwapOption};
+use arc_swap::{ArcSwapOption};
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use nohash_hasher::IntMap;
@@ -11,14 +11,34 @@ use once_cell::sync::Lazy;
 use tokio::sync::{Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
-use tokio_util::sync::CancellationToken;
-use crate::overlap::OverlapContext;
-use crate::task::Task;
+use crate::task::{Task};
 
 pub static CHRONOLOG_SCHEDULER: Lazy<Arc<ChronologScheduler>> = Lazy::new(|| ChronologScheduler::new());
 
+pub(crate) struct ScheduledItem(pub(crate) usize, pub(crate) DateTime<Local>);
+
+impl Eq for ScheduledItem {}
+
+impl PartialEq<Self> for ScheduledItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl PartialOrd<Self> for ScheduledItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.1.partial_cmp(&other.1)
+    }
+}
+
+impl Ord for ScheduledItem {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.1.cmp(&other.1)
+    }
+}
+
 /// The [`Scheduler`] trait defines a basis for what a scheduler is, a scheduler is the actual mechanism
-/// that drives the execution of multiple [`Task`] structs in specific times the tasks request,
+/// that drives the execution of multiple [`TaskUnit`] structs in specific times the tasks request,
 /// typically this is mainly for extensibility. In most scenarios, the default global scheduler
 /// which is [`CHRONOLOG_SCHEDULER`] or the struct [`ChronologScheduler`] can be used for the scheduling logic
 ///
@@ -40,10 +60,10 @@ pub static CHRONOLOG_SCHEDULER: Lazy<Arc<ChronologScheduler>> = Lazy::new(|| Chr
 #[async_trait]
 pub trait Scheduler {
     /// Start the scheduler, if the scheduler is already started, then do nothing
-    async fn start(self: &Arc<Self>);
+    async fn start(self: &'static Arc<Self>);
 
     /// Register a task on the scheduler, returning an index pointing to the task
-    async fn register(self: &Arc<Self>, task: impl Task + 'static) -> usize;
+    async fn register(self: &Arc<Self>, task: Task) -> usize;
 
     /// Remove (cancel) a task from the scheduler via an index
     async fn cancel(self: &Arc<Self>, index: usize);
@@ -55,33 +75,6 @@ pub trait Scheduler {
     async fn clear(self: &Arc<Self>);
 }
 
-pub(crate) struct TaskEntry {
-    pub(crate) task: Arc<Mutex<dyn Task>>,
-    pub(crate) target_time: ArcSwap<DateTime<Local>>,
-    pub(crate) marked_for_delete: AtomicBool,
-    pub(crate) process: ArcSwapOption<JoinHandle<()>>,
-    pub(crate) cancel_token: ArcSwapOption<CancellationToken>,
-}
-
-impl Eq for TaskEntry {}
-
-impl PartialEq<Self> for TaskEntry {
-    fn eq(&self, other: &Self) -> bool {
-        *self.target_time.load() == *other.target_time.load()
-    }
-}
-
-impl PartialOrd<Self> for TaskEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.target_time.load().partial_cmp(&other.target_time.load())
-    }
-}
-
-impl Ord for TaskEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.target_time.load().cmp(&other.target_time.load())
-    }
-}
 /// This is the default implementation of a [`Scheduler`], the scheduler internally holds a map
 /// of all indexes to task entries and a min-heap sorted based on the execution time (from earliest
 /// to latest). The pipeline of the scheduler goes as follows:
@@ -100,15 +93,15 @@ impl Ord for TaskEntry {
 /// - Re-allocates the task entry back to the min-heap (which is sorted based on the new future time).
 /// - Repeat the process if there are any tasks left.
 pub struct ChronologScheduler {
-    earliest_sorted: Mutex<BinaryHeap<Reverse<Arc<TaskEntry>>>>,
-    tasks: Mutex<IntMap<usize, Arc<TaskEntry>>>,
+    earliest_sorted: Mutex<BinaryHeap<Reverse<ScheduledItem>>>,
+    tasks: RwLock<IntMap<usize, Arc<Task>>>,
     task_process: ArcSwapOption<JoinHandle<()>>,
 }
 
 impl ChronologScheduler {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            tasks: Mutex::new(IntMap::default()),
+            tasks: RwLock::new(IntMap::default()),
             earliest_sorted: Mutex::new(BinaryHeap::new()),
             task_process: ArcSwapOption::from_pointee(None)
         })
@@ -117,57 +110,48 @@ impl ChronologScheduler {
 
 #[async_trait]
 impl Scheduler for ChronologScheduler {
-    async fn start(self: &Arc<Self>) {
+    async fn start(self: &'static Arc<Self>) {
         let this = self.clone();
         self.task_process.store(Some(Arc::new(
             tokio::spawn(async move {
                 loop {
                     let mut heap = this.earliest_sorted.lock().await;
-                    if let Some(Reverse(task_entry)) = heap.pop() {
+                    if let Some(Reverse(scheduled_item)) = heap.pop() {
                         drop(heap);
-                        if task_entry.marked_for_delete.load(std::sync::atomic::Ordering::Relaxed) {
-                            continue;
-                        }
+                        let tasks_lock = self.tasks.read().await;
+                        let task = tasks_lock.get(&scheduled_item.0).unwrap().clone();
+                        drop(tasks_lock);
                         let (schedule, last_exec) = {
-                            let loaded_time = task_entry.target_time.load();
-                            let task_lock = task_entry.task.lock().await;
                             let now_chrono = Local::now();
                             let now_tokio = Instant::now();
-                            let delta = &loaded_time.signed_duration_since(now_chrono);
+                            let delta = &scheduled_item.1.signed_duration_since(now_chrono);
                             let target_time = if delta.num_milliseconds() <= 0 {
                                 now_tokio
                             } else {
                                 now_tokio + Duration::from_millis(delta.num_milliseconds() as u64)
                             };
-                            drop(task_lock);
                             sleep_until(target_time).await;
-                            let mut task_lock = task_entry.task.lock().await;
-                            let runs = task_lock.total_runs().await + 1;
-                            task_lock.set_total_runs(runs).await;
+                            let runs = task.metadata.run_count()
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                             let last_exec = Local::now();
-                            task_lock.set_last_execution(last_exec).await;
-                            drop(task_lock);
-                            let task_lock = task_entry.task.lock().await;
-                            let max_runs = task_lock.maximum_runs().await;
-                            let schedule = task_lock.get_schedule().await.clone();
-                            let policy = task_lock.overlap_policy().await;
-                            drop(task_lock);
+                            task.metadata.last_exec().swap(Arc::new(last_exec));
+                            let max_runs = task.metadata.max_runs();
+                            let policy = task.metadata.overlap_policy();
                             dbg!("TEST START");
-                            policy.handle(&OverlapContext(&*task_entry)).await;
+                            policy.handle(task.clone()).await;
                             dbg!("TEST END");
                             match max_runs {
                                 Some(m) if runs == m.get() => {continue},
                                 _ => {}
                             };
-                            (schedule, last_exec)
+                            (task.schedule.clone(), last_exec)
                         };
-                        let mut future_time = schedule.next_after(last_exec).unwrap();
+                        let mut future_time = schedule.next_after(&last_exec).unwrap();
                         if (future_time - last_exec).subsec_millis() < 5 {
-                            future_time = schedule.next_after(future_time + chrono::Duration::milliseconds(5)).unwrap();
+                            future_time = schedule.next_after(&(future_time + chrono::Duration::milliseconds(5))).unwrap();
                         }
-                        task_entry.target_time.store(Arc::new(future_time));
                         let mut heap = this.earliest_sorted.lock().await;
-                        heap.push(Reverse(task_entry));
+                        heap.push(Reverse(ScheduledItem(scheduled_item.0, future_time)));
                         drop(heap);
                     }
                 }
@@ -175,39 +159,25 @@ impl Scheduler for ChronologScheduler {
         )));
     }
 
-    async fn register(self: &Arc<Self>, task: impl Task + 'static) -> usize {
-        let task = Arc::new(Mutex::new(task));
-        let target_time = {
-            let task_lock = task.lock().await;
-            let last_exec = task_lock.last_execution().await;
-            let schedule = task_lock.get_schedule().await;
-
-            ArcSwap::from_pointee(schedule.next_after(last_exec).unwrap())
-        };
-        let entry = Arc::new(TaskEntry {
-            task,
-            target_time,
-            marked_for_delete: AtomicBool::new(false),
-            cancel_token: ArcSwapOption::new(None),
-            process: ArcSwapOption::new(None)
-        });
-        let mut earliest_tasks = self.earliest_sorted.lock().await;
-        earliest_tasks.push(Reverse(entry.clone()));
+    async fn register(self: &Arc<Self>, task: Task) -> usize {
+        let last_exec = Local::now();
+        let future_time = task.schedule.next_after(&last_exec).unwrap();
         let id: usize = {
-            let mut tasks = self.tasks.lock().await;
+            let mut tasks = self.tasks.write().await;
             let id = tasks.len();
-            tasks.insert(id, entry);
+            tasks.insert(id, Arc::new(task));
             id
         };
+        let entry = ScheduledItem(id, future_time);
+        let mut earliest_tasks = self.earliest_sorted.lock().await;
+        earliest_tasks.push(Reverse(entry));
 
         id
     }
 
     async fn cancel(self: &Arc<Self>, id: usize) {
-        let mut tasks = self.tasks.lock().await;
-        if let Some(registry) = tasks.remove(&id) {
-            registry.marked_for_delete.store(true, std::sync::atomic::Ordering::Release);
-        }
+        let mut tasks = self.tasks.write().await;
+        tasks.remove(&id);
     }
 
     async fn abort(self: &Arc<Self>) {
@@ -218,6 +188,6 @@ impl Scheduler for ChronologScheduler {
 
     async fn clear(self: &Arc<Self>) {
         self.earliest_sorted.lock().await.clear();
-        self.tasks.lock().await.clear();
+        self.tasks.write().await.clear();
     }
 }
