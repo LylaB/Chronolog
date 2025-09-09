@@ -1,63 +1,25 @@
-use std::sync::{Arc};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-use crate::scheduler::TaskEntry;
-use crate::task::Task;
-
-#[derive(Clone)]
-pub struct OverlapContext<'a>(pub(crate) &'a TaskEntry);
-
-impl<'a> OverlapContext<'a> {
-    pub fn get_task(&self) -> Arc<Mutex<dyn Task>> {
-        self.0.task.clone()
-    }
-
-    pub fn set_process(&self, handle: JoinHandle<()>, token: Arc<CancellationToken>) {
-        self.0.process.store(Some(Arc::new(handle)));
-        self.0.cancel_token.store(Some(token));
-    }
-
-    pub fn has_running(&self) -> bool {
-        self.0.process.load().is_some()
-    }
-
-    pub fn abort_running(&self) {
-        if let (Some(handle), Some(token)) = (
-            &*self.0.process.load(),
-            &*self.0.cancel_token.load()
-        ) {
-            handle.abort();
-            token.cancel();
-        }
-    }
-}
+use std::sync::Arc;
+use crate::task::{Task};
 
 #[async_trait::async_trait]
 pub trait OverlapStrategy: Send + Sync {
-    async fn handle(&self, task_entry: &OverlapContext<'_>);
+    async fn handle(&self, task: Arc<Task>);
 }
 
 pub struct SequentialOverlapPolicy;
 #[async_trait::async_trait]
 impl OverlapStrategy for SequentialOverlapPolicy {
-    async fn handle(&self, ctx: &OverlapContext<'_>) {
-        let task = ctx.get_task();
-        let lock = task.lock().await;
-        let token = Arc::new(CancellationToken::new());
-        lock.process(token).await.unwrap();
+    async fn handle(&self, task: Arc<Task>) {
+        task.frame.execute(&*task.metadata).await.unwrap();
     }
 }
 
 pub struct ParallelOverlapPolicy;
 #[async_trait::async_trait]
 impl OverlapStrategy for ParallelOverlapPolicy {
-    async fn handle(&self, ctx: &OverlapContext<'_>) {
-        let task = ctx.get_task();
-        let token = Arc::new(CancellationToken::new());
+    async fn handle(&self, task: Arc<Task>) {
         tokio::spawn(async move {
-            let lock = task.lock().await;
-            lock.process(token).await.unwrap()
+            task.frame.execute(&*task.metadata).await.unwrap();
         });
     }
 }
