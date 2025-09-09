@@ -144,7 +144,7 @@ fn rebuild_datetime_from_parts(
 }
 
 impl Schedule for ScheduleCalendar {
-    fn next_after(&self, time: DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
         let mut dates = [
             time.timestamp_subsec_millis(), time.second(),
             time.minute(), time.hour(), time.day0(),
@@ -187,7 +187,7 @@ impl Schedule for ScheduleCalendar {
         );
         for (index, &field) in fields.iter().enumerate() {
             if index > 0 && matches!(fields[index - 1], CalendarFieldSchedule::Exactly(_))
-                && !matches!(field, CalendarFieldSchedule::Exactly(_)) && modified < time {
+                && !matches!(field, CalendarFieldSchedule::Exactly(_)) && modified < *time {
                 match index {
                     0 => {},
                     1 => modified += TimeDelta::seconds(1),
