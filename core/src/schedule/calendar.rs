@@ -1,8 +1,10 @@
+use crate::schedule::TaskSchedule;
+use chrono::{
+    DateTime, Datelike, Local, LocalResult, Months, NaiveDate, TimeDelta, TimeZone, Timelike,
+};
 use std::fmt::Debug;
 use std::sync::Arc;
-use chrono::{DateTime, Datelike, Local, LocalResult, Months, NaiveDate, TimeDelta, TimeZone, Timelike};
 use typed_builder::TypedBuilder;
-use crate::schedule::TaskSchedule;
 
 /// Defines a field on the schedule for [`TaskSchedule::Calendar`], by itself it just holds data and how this
 /// data is scheduled, it is useful for [`TaskSchedule::Calendar`] only, all fields used in the calendar are
@@ -44,7 +46,7 @@ impl Debug for TaskCalendarField {
                 Self::Ignore => "Ignore".to_owned(),
                 Self::Every(d) => format!("Every({d:?})"),
                 Self::Exactly(res) => format!("Exactly({res:?})"),
-                Self::Custom(_) => "Custom(...)".to_owned()
+                Self::Custom(_) => "Custom(...)".to_owned(),
             }
         }))
     }
@@ -107,19 +109,28 @@ pub struct TaskScheduleCalendar {
     second: TaskCalendarField,
 
     #[builder(default=TaskCalendarField::Ignore)]
-    millisecond: TaskCalendarField
+    millisecond: TaskCalendarField,
 }
 
 #[inline(always)]
 fn last_day_of_month(year: i32, month: u32) -> u32 {
-    let (next_year, next_month) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     (NaiveDate::from_ymd_opt(next_year, next_month, 1).unwrap() - chrono::Duration::days(1)).day()
 }
 
 #[inline]
 fn rebuild_datetime_from_parts(
-    year: i32, month: u32, day: u32,
-    hour: u32, minute: u32, second: u32, millisecond: u32
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+    millisecond: u32,
 ) -> DateTime<Local> {
     let day = std::cmp::min(day, last_day_of_month(year, month));
     let naive = NaiveDate::from_ymd_opt(year, month, day)
@@ -144,11 +155,18 @@ fn rebuild_datetime_from_parts(
 }
 
 impl TaskSchedule for TaskScheduleCalendar {
-    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    fn next_after(
+        &self,
+        time: &DateTime<Local>,
+    ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
         let mut dates = [
-            time.timestamp_subsec_millis(), time.second(),
-            time.minute(), time.hour(), time.day0(),
-            time.month0(), time.year() as u32
+            time.timestamp_subsec_millis(),
+            time.second(),
+            time.minute(),
+            time.hour(),
+            time.day0(),
+            time.month0(),
+            time.year() as u32,
         ];
         let fields = [
             &self.millisecond,
@@ -157,16 +175,15 @@ impl TaskSchedule for TaskScheduleCalendar {
             &self.hour,
             &self.day,
             &self.month,
-            &self.year
+            &self.year,
         ];
         for (index, &field) in fields.iter().enumerate() {
             let date_field = dates.get_mut(index).unwrap();
             match field {
                 TaskCalendarField::Ignore => {}
                 TaskCalendarField::Every(d) => {
-                    *date_field += (*d as f64)
-                        .clamp(u32::MIN as f64, u32::MAX as f64)
-                        .round() as u32;
+                    *date_field +=
+                        (*d as f64).clamp(u32::MIN as f64, u32::MAX as f64).round() as u32;
                 }
                 TaskCalendarField::Exactly(res) => {
                     *date_field = *res;
@@ -183,13 +200,16 @@ impl TaskSchedule for TaskScheduleCalendar {
             dates[3],
             dates[2],
             dates[1],
-            dates[0]
+            dates[0],
         );
         for (index, &field) in fields.iter().enumerate() {
-            if index > 0 && matches!(fields[index - 1], TaskCalendarField::Exactly(_))
-                && !matches!(field, TaskCalendarField::Exactly(_)) && modified < *time {
+            if index > 0
+                && matches!(fields[index - 1], TaskCalendarField::Exactly(_))
+                && !matches!(field, TaskCalendarField::Exactly(_))
+                && modified < *time
+            {
                 match index {
-                    0 => {},
+                    0 => {}
                     1 => modified += TimeDelta::seconds(1),
                     2 => modified += TimeDelta::minutes(1),
                     3 => modified += TimeDelta::hours(1),

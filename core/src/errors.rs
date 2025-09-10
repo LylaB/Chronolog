@@ -1,6 +1,6 @@
+use crate::task::TaskError;
 use std::fmt::Debug;
 use thiserror::Error;
-use crate::task::TaskError;
 
 #[derive(Error, Debug)]
 pub enum ChronologErrors {
@@ -11,5 +11,5 @@ pub enum ChronologErrors {
     TaskAborted(String),
 
     #[error("`{0}` Timed out")]
-    TimeoutError(String)
+    TimeoutError(String),
 }
