@@ -29,7 +29,7 @@ use crate::schedule::{TaskSchedule};
 /// - [`TaskSchedule`]
 /// - [`crate::scheduler::Scheduler`](scheduler)
 #[derive(Clone, Default)]
-pub enum CalendarFieldSchedule {
+pub enum TaskCalendarField {
     #[default]
     Ignore,
     Every(u32),
@@ -37,7 +37,7 @@ pub enum CalendarFieldSchedule {
     Custom(Arc<dyn Fn(u32) -> u32 + Send + Sync>),
 }
 
-impl Debug for CalendarFieldSchedule {
+impl Debug for TaskCalendarField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("CalendarFieldSchedule::{}", &{
             match self {
@@ -54,7 +54,7 @@ impl Debug for CalendarFieldSchedule {
 /// schedules with fine-grained control over individual calendar fields.
 ///
 /// Each field can be configured independently to restrict when the schedule should match.
-/// By default, all fields are set to [`CalendarFieldSchedule::Ignore`], which means the field
+/// By default, all fields are set to [`TaskCalendarField::Ignore`], which means the field
 /// is ignored and instead replaced with the time's fields in [`TaskScheduleCalendar::next_after`] (if
 /// there is an exact field after the ignore, then its zero)
 ///
@@ -62,12 +62,12 @@ impl Debug for CalendarFieldSchedule {
 ///
 /// ```rust
 /// // Example: A schedule that runs every day at 12:30:00.00
-/// use chronolog_core::schedule::{TaskScheduleCalendar, CalendarFieldSchedule};
+/// use chronolog_core::schedule::{TaskScheduleCalendar, TaskCalendarField};
 ///
 /// let schedule = TaskScheduleCalendar::builder()
-///     .hour(CalendarFieldSchedule::Exactly(12))
-///     .minute(CalendarFieldSchedule::Exactly(30))
-///     .second(CalendarFieldSchedule::Exactly(0))
+///     .hour(TaskCalendarField::Exactly(12))
+///     .minute(TaskCalendarField::Exactly(30))
+///     .second(TaskCalendarField::Exactly(0))
 ///     .build();
 /// ```
 ///
@@ -85,29 +85,29 @@ impl Debug for CalendarFieldSchedule {
 ///
 /// # See
 /// - [`TaskSchedule`]
-/// - [`CalendarFieldSchedule`]
+/// - [`TaskCalendarField`]
 #[derive(TypedBuilder, Clone)]
 pub struct TaskScheduleCalendar {
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    year: CalendarFieldSchedule,
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    year: TaskCalendarField,
 
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    month: CalendarFieldSchedule,
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    month: TaskCalendarField,
 
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    day: CalendarFieldSchedule,
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    day: TaskCalendarField,
 
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    hour: CalendarFieldSchedule,
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    hour: TaskCalendarField,
 
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    minute: CalendarFieldSchedule,
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    minute: TaskCalendarField,
 
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    second: CalendarFieldSchedule,
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    second: TaskCalendarField,
 
-    #[builder(default=CalendarFieldSchedule::Ignore)]
-    millisecond: CalendarFieldSchedule
+    #[builder(default=TaskScheduleCalendar::Ignore)]
+    millisecond: TaskCalendarField
 }
 
 #[inline(always)]
@@ -162,16 +162,16 @@ impl TaskSchedule for TaskScheduleCalendar {
         for (index, &field) in fields.iter().enumerate() {
             let date_field = dates.get_mut(index).unwrap();
             match field {
-                CalendarFieldSchedule::Ignore => {}
-                CalendarFieldSchedule::Every(d) => {
+                TaskCalendarField::Ignore => {}
+                TaskCalendarField::Every(d) => {
                     *date_field += (*d as f64)
                         .clamp(u32::MIN as f64, u32::MAX as f64)
                         .round() as u32;
                 }
-                CalendarFieldSchedule::Exactly(res) => {
+                TaskCalendarField::Exactly(res) => {
                     *date_field = *res;
                 }
-                CalendarFieldSchedule::Custom(func) => {
+                TaskCalendarField::Custom(func) => {
                     *date_field = func(*date_field);
                 }
             }
@@ -186,8 +186,8 @@ impl TaskSchedule for TaskScheduleCalendar {
             dates[0]
         );
         for (index, &field) in fields.iter().enumerate() {
-            if index > 0 && matches!(fields[index - 1], CalendarFieldSchedule::Exactly(_))
-                && !matches!(field, CalendarFieldSchedule::Exactly(_)) && modified < *time {
+            if index > 0 && matches!(fields[index - 1], TaskCalendarField::Exactly(_))
+                && !matches!(field, TaskCalendarField::Exactly(_)) && modified < *time {
                 match index {
                     0 => {},
                     1 => modified += TimeDelta::seconds(1),
