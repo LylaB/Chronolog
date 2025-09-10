@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use chrono::{DateTime, Datelike, Local, LocalResult, Months, NaiveDate, TimeDelta, TimeZone, Timelike};
 use typed_builder::TypedBuilder;
-use crate::schedule::{TaskSchedule};
+use crate::schedule::TaskSchedule;
 
 /// Defines a field on the schedule for [`TaskSchedule::Calendar`], by itself it just holds data and how this
 /// data is scheduled, it is useful for [`TaskSchedule::Calendar`] only, all fields used in the calendar are

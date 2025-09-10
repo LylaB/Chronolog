@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 use async_trait::async_trait;
-use crate::{policy_match};
+use crate::policy_match;
 use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
-use crate::task::parallel::{ParallelTaskFrame};
+use crate::task::parallel::ParallelTaskFrame;
 
 /// Defines a policy set for the [`SequentialTaskFrame`], these change the behavior of how the
 /// parallel task frame operates, by default the parallel policy
