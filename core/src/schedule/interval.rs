@@ -2,9 +2,9 @@ use std::ops::Add;
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Local, TimeDelta};
-use crate::schedule::Schedule;
+use crate::schedule::TaskSchedule;
 
-/// [`ScheduleInterval`] is a straightforward implementation of the [`Schedule`] trait
+/// [`TaskScheduleInterval`] is a straightforward implementation of the [`TaskSchedule`] trait
 /// that executes tasks at a fixed interval.
 ///
 /// The interval is defined using either a [`TimeDelta`] or a [`Duration`], making it
@@ -13,25 +13,25 @@ use crate::schedule::Schedule;
 ///
 /// # Construction
 ///
-/// - Use [`ScheduleInterval::new`] to create an interval schedule from a [`TimeDelta`].
-/// - Use [`ScheduleInterval::duration`] when constructing from a [`Duration`].
+/// - Use [`TaskScheduleInterval::new`] to create an interval schedule from a [`TimeDelta`].
+/// - Use [`TaskScheduleInterval::duration`] when constructing from a [`Duration`].
 ///
 /// # Examples
 ///
 /// ```rust
 /// use std::time::Duration;
-/// use chronolog::schedule::ScheduleInterval;
+/// use chronolog_core::schedule::TaskScheduleInterval;
 ///
 /// // Run every 5 seconds
-/// let schedule = ScheduleInterval::duration(Duration::from_secs(5));
+/// let schedule = TaskScheduleInterval::duration(Duration::from_secs(5));
 /// ```
 ///
 /// # See also
-/// - [`Schedule`] — the trait implemented by this type
+/// - [`TaskSchedule`] — the trait implemented by this type
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Copy, Default)]
-pub struct ScheduleInterval(pub(crate) TimeDelta);
+pub struct TaskScheduleInterval(pub(crate) TimeDelta);
 
-impl ScheduleInterval {
+impl TaskScheduleInterval {
     pub fn new(interval: TimeDelta) -> Self {
         Self(interval)
     }
@@ -39,9 +39,17 @@ impl ScheduleInterval {
     pub fn duration(interval: Duration) -> Self {
         Self(TimeDelta::from_std(interval).unwrap())
     }
+
+    pub fn from_secs(interval: u32) -> Self {
+        Self(TimeDelta::seconds(interval as i64))
+    }
+
+    pub fn from_secs_f64(interval: f64) -> Self {
+        Self(TimeDelta::from_std(Duration::from_secs_f64(interval)).unwrap())
+    }
 }
 
-impl Schedule for ScheduleInterval {
+impl TaskSchedule for TaskScheduleInterval {
     fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
         Ok(time.add(self.0))
     }
