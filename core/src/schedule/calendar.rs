@@ -88,25 +88,25 @@ impl Debug for TaskCalendarField {
 /// - [`TaskCalendarField`]
 #[derive(TypedBuilder, Clone)]
 pub struct TaskScheduleCalendar {
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     year: TaskCalendarField,
 
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     month: TaskCalendarField,
 
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     day: TaskCalendarField,
 
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     hour: TaskCalendarField,
 
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     minute: TaskCalendarField,
 
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     second: TaskCalendarField,
 
-    #[builder(default=TaskScheduleCalendar::Ignore)]
+    #[builder(default=TaskCalendarField::Ignore)]
     millisecond: TaskCalendarField
 }
 
