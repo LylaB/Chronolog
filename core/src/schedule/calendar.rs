@@ -2,10 +2,10 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use chrono::{DateTime, Datelike, Local, LocalResult, Months, NaiveDate, TimeDelta, TimeZone, Timelike};
 use typed_builder::TypedBuilder;
-use crate::schedule::{Schedule};
+use crate::schedule::{TaskSchedule};
 
-/// Defines a field on the schedule for [`Schedule::Calendar`], by itself it just holds data and how this
-/// data is scheduled, it is useful for [`Schedule::Calendar`] only, all fields used in the calendar are
+/// Defines a field on the schedule for [`TaskSchedule::Calendar`], by itself it just holds data and how this
+/// data is scheduled, it is useful for [`TaskSchedule::Calendar`] only, all fields used in the calendar are
 /// zero-based (they start from zero), fields have their own ranges defined, typically:
 /// - **Year** can be any value (unrestricted)
 /// - **Month** must be between 0 and 11 range
@@ -26,7 +26,7 @@ use crate::schedule::{Schedule};
 /// is the current time's field and returns the corresponding field to use (behaves like Exactly but as a function)
 ///
 /// # See
-/// - [`Schedule`]
+/// - [`TaskSchedule`]
 /// - [`crate::scheduler::Scheduler`](scheduler)
 #[derive(Clone, Default)]
 pub enum CalendarFieldSchedule {
@@ -50,21 +50,21 @@ impl Debug for CalendarFieldSchedule {
     }
 }
 
-/// [`ScheduleCalendar`] is an implementation of the [`Schedule`] trait that allows defining
+/// [`TaskScheduleCalendar`] is an implementation of the [`TaskSchedule`] trait that allows defining
 /// schedules with fine-grained control over individual calendar fields.
 ///
 /// Each field can be configured independently to restrict when the schedule should match.
 /// By default, all fields are set to [`CalendarFieldSchedule::Ignore`], which means the field
-/// is ignored and instead replaced with the time's fields in [`ScheduleCalendar::next_after`] (if
+/// is ignored and instead replaced with the time's fields in [`TaskScheduleCalendar::next_after`] (if
 /// there is an exact field after the ignore, then its zero)
 ///
 /// # Examples
 ///
 /// ```rust
 /// // Example: A schedule that runs every day at 12:30:00.00
-/// use chronolog::schedule::{ScheduleCalendar, CalendarFieldSchedule};
+/// use chronolog_core::schedule::{TaskScheduleCalendar, CalendarFieldSchedule};
 ///
-/// let schedule = ScheduleCalendar::builder()
+/// let schedule = TaskScheduleCalendar::builder()
 ///     .hour(CalendarFieldSchedule::Exactly(12))
 ///     .minute(CalendarFieldSchedule::Exactly(30))
 ///     .second(CalendarFieldSchedule::Exactly(0))
@@ -84,10 +84,10 @@ impl Debug for CalendarFieldSchedule {
 /// - **millisecond** The millisecond field. Valid range: **0–999** (inclusive).
 ///
 /// # See
-/// - [`Schedule`]
+/// - [`TaskSchedule`]
 /// - [`CalendarFieldSchedule`]
 #[derive(TypedBuilder, Clone)]
-pub struct ScheduleCalendar {
+pub struct TaskScheduleCalendar {
     #[builder(default=CalendarFieldSchedule::Ignore)]
     year: CalendarFieldSchedule,
 
@@ -143,7 +143,7 @@ fn rebuild_datetime_from_parts(
     }
 }
 
-impl Schedule for ScheduleCalendar {
+impl TaskSchedule for TaskScheduleCalendar {
     fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
         let mut dates = [
             time.timestamp_subsec_millis(), time.second(),
