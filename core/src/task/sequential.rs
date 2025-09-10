@@ -1,90 +1,127 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 use async_trait::async_trait;
-use crate::task::{TaskFrame, TaskMetadata};
-use crate::task::parallel::ParallelTask;
+use crate::{policy_match};
+use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
+use crate::task::parallel::{ParallelTaskFrame};
 
+/// Defines a policy set for the [`SequentialTaskFrame`], these change the behavior of how the
+/// parallel task frame operates, by default the parallel policy
+/// [`SequentialTaskPolicy::RunSilenceFailures`] is used
 pub enum SequentialTaskPolicy {
+    /// Runs a task frame and its results do not affect the [`SequentialTaskFrame`]
     RunSilenceFailures,
+
+    /// Runs a task frame, if it succeeds then it halts the other task frames and 
+    /// halts [`SequentialTaskFrame`], if not then it ignores the results and continues
     RunUntilSuccess,
+
+    /// Runs a task frame, if it fails then it halts the other task frames and 
+    /// returns the error, halting [`SequentialTaskFrame`], if not then it ignores the results 
+    /// and continues
     RunUntilFailure,
 }
 
-/// Represents a **sequential task** which wraps multiple tasks to execute at the same time in a sequential
-/// manner. This task type acts as a **composite node** within the task hierarchy, facilitating a way to
-/// represent multiple tasks which have same timings but depend on each previous task finishing. The
-/// order of execution is ordered, and thus why its sequential, in the case where execution order
-/// does not matter, tasks do not require sequential execution, it is advised to use [`ParallelTask`] 
-/// as opposed to [`SequentialTask`]
+/// Represents a **sequential task frame** which wraps multiple task frames to execute at the same time
+/// in a sequential manner. This task frametype acts as a **composite node** within the task frame hierarchy,
+/// facilitating a way to represent multiple task frames which have same timings but depend on each
+/// previous task frame finishing. The order of execution is ordered, and thus why its sequential,
+/// in the case where execution order does not matter and tasks do not require sequential execution,
+/// it is advised to use [`ParallelTaskFrame`] as opposed to [`SequentialTaskFrame`]
+/// 
+/// # Events
+/// For events, [`SequentialTaskFrame`] has 2 of them, these being `on_child_start` and `on_child_end`,
+/// the former is for when a child task frame is about to start, the event hands out the target task 
+/// frame. For the latter, it is for when a child task frame ends, the event hands out the target
+/// task frame and an optional error in case it fails
 ///
 /// # Example
 /// ```ignore
 /// use std::sync::Arc;
-/// use std::time::Duration;
-/// use chronolog::schedule::ScheduleInterval;
-/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
-/// use chronolog::task::fallback::FallbackTask;
-/// use chronolog::task::execution::ExecutionTask;
-/// use chronolog::task::parallel::SequentialTask;
+/// use chronolog_core::schedule::TaskScheduleInterval;
+/// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog_core::task::{ExecutionTaskFrame, Task};
+/// use chronolog_core::task::sequential::SequentialTaskFrame;
 ///
-/// let primary_task = ExecutionTask::builder()
-///     .schedule(ScheduleInterval::default())
-///     .func(|_metadata| async {
-///         println!("Executing Primary Task");
+/// let primary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Primary task frame fired...");
 ///         Ok(())
-///     })
-///     .build();
+///     }
+/// );
 ///
-/// let secondary_task = ExecutionTask::builder()
-///     .schedule(ScheduleInterval::default())
-///     .func(|_metadata| async {
-///         println!("Executing Secondary Task");
+/// let secondary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Secondary task frame fired...");
 ///         Ok(())
-///     })
-///     .build();
+///     }
+/// );
 ///
-/// let tertiary_task = ExecutionTask::builder()
-///     .schedule(ScheduleInterval::default())
-///     .func(|_metadata| async {
-///         println!("Executing Tertiary Task");
+/// let tertiary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Tertiary task frame fired...");
 ///         Err(())
-///     })
-///     .build();
+///     }
+/// );
 ///
-/// let sequential_task = SequentialTask::builder()
-///     .tasks(vec![Arc::new(primary_task), Arc::new(secondary_task), Arc::new(tertiary_task)])
-///     .build();
+/// let parallel_frame = SequentialTaskFrame::new(
+///     vec![
+///         Arc::new(primary_frame),
+///         Arc::new(secondary_frame),
+///         Arc::new(tertiary_frame)
+///     ]
+/// );
 ///
-/// CHRONOLOG_SCHEDULER.register(sequential_task).await;
+/// let task = Task::define(TaskScheduleInterval::from_secs_f64(1.25), parallel_frame);
+///
+/// CHRONOLOG_SCHEDULER.register(task).await;
 /// ```
-pub struct SequentialTask(Vec<Arc<dyn TaskFrame>>, SequentialTaskPolicy);
+pub struct SequentialTaskFrame {
+    tasks: Vec<Arc<dyn TaskFrame>>,
+    policy: SequentialTaskPolicy,
+    on_start: TaskStartEvent,
+    on_end: TaskEndEvent,
+    pub on_child_start: ArcTaskEvent<Arc<dyn TaskFrame>>,
+    pub on_child_end: ArcTaskEvent<(Arc<dyn TaskFrame>, Option<TaskError>)>,
+}
 
-impl SequentialTask {
-    pub fn new(tasks: Vec<Arc<dyn TaskFrame>>) -> SequentialTask {
-        SequentialTask(tasks, SequentialTaskPolicy::RunSilenceFailures)
+impl SequentialTaskFrame {
+    pub fn new(tasks: Vec<Arc<dyn TaskFrame>>) -> SequentialTaskFrame {
+        Self::new_with(tasks, SequentialTaskPolicy::RunSilenceFailures)
     }
     
-    pub fn new_with(tasks: Vec<Arc<dyn TaskFrame>>, policy: SequentialTaskPolicy) -> SequentialTask {
-        SequentialTask(tasks, policy)
+    pub fn new_with(tasks: Vec<Arc<dyn TaskFrame>>, sequential_policy: SequentialTaskPolicy) -> SequentialTaskFrame {
+        Self {
+            tasks,
+            policy: sequential_policy,
+            on_start: TaskEvent::new(),
+            on_end: TaskEvent::new(),
+            on_child_end: TaskEvent::new(),
+            on_child_start: TaskEvent::new(),
+        }
     }
 }
 
 #[async_trait]
-impl TaskFrame for SequentialTask {
-    async fn execute(&self, metadata: &(dyn TaskMetadata + Send + Sync)) -> Result<(), Arc<dyn Debug + Send + Sync>> {
-        for task in self.0.iter() {
-            let result = task.execute(metadata).await;
-            match (&self.1, result) {
-                (SequentialTaskPolicy::RunUntilFailure, Err(res)) => {
-                    return Err(res)
-                }
-                (SequentialTaskPolicy::RunUntilSuccess, Ok(res)) => {
-                    return Ok(res);
-                }
-                (_, Ok(_)) => {}
-                (_, Err(_)) => {}
-            }
+impl TaskFrame for SequentialTaskFrame {
+    async fn execute(
+        &self,
+        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        emitter: Arc<TaskEventEmitter>
+    ) -> Result<(), TaskError> {
+        for task in self.tasks.iter() {
+            emitter.clone().emit(metadata.clone(), self.on_child_start.clone(), task.clone()).await;
+            let result = task.execute(metadata.clone(), emitter.clone()).await;
+            policy_match!(metadata, emitter, task, self, result, SequentialTaskPolicy);
         }
         Ok(())
+    }
+
+    fn on_start(&self) -> TaskStartEvent {
+        self.on_start.clone()
+    }
+
+    fn on_end(&self) -> TaskEndEvent {
+        self.on_end.clone()
     }
 }
