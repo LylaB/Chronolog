@@ -1,7 +1,10 @@
+use crate::task::{
+    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
+    TaskFrame, TaskStartEvent,
+};
+use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
-use async_trait::async_trait;
-use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
 
 /// Represents a **fallback task frame** which wraps two other task frames. This task frame type acts as a
 /// **composite node** within the task frame hierarchy, providing a failover mechanism for execution.
@@ -15,7 +18,7 @@ use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, Ta
 /// [`FallbackTaskFrame`] includes one event for when the fallback is triggered. Handing out the fallback
 /// task frame instance being executed as well as the task error which can be accessed via the `on_fallback`
 /// field
-/// 
+///
 /// # Example
 /// ```ignore
 /// use chronolog_core::schedule::TaskScheduleInterval;
@@ -36,7 +39,7 @@ use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, Ta
 ///         Ok::<(), ()>(())
 ///     }
 /// );
-/// 
+///
 /// let fallback_frame = FallbackTaskFrame::new(primary_frame, secondary_frame);
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs(1), fallback_frame);
@@ -47,7 +50,7 @@ pub struct FallbackTaskFrame<T: 'static, T2: 'static> {
     secondary: Arc<T2>,
     on_start: TaskStartEvent,
     on_end: TaskEndEvent,
-    pub on_fallback: ArcTaskEvent<(Arc<T2>, TaskError)>
+    pub on_fallback: ArcTaskEvent<(Arc<T2>, TaskError)>,
 }
 
 impl<T, T2> FallbackTaskFrame<T, T2>
@@ -61,7 +64,7 @@ where
             secondary: Arc::new(secondary),
             on_start: TaskEvent::new(),
             on_end: TaskEvent::new(),
-            on_fallback: TaskEvent::new()
+            on_fallback: TaskEvent::new(),
         }
     }
 }
@@ -77,17 +80,23 @@ where
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
-        let result = match self.primary.execute(metadata.clone(), emitter.clone()).await {
+        let result = match self
+            .primary
+            .execute(metadata.clone(), emitter.clone())
+            .await
+        {
             Err(err) => {
-                emitter.emit(
-                    metadata.clone(),
-                    self.on_fallback.clone(),
-                    (self.secondary.clone(), err)
-                ).await;
+                emitter
+                    .emit(
+                        metadata.clone(),
+                        self.on_fallback.clone(),
+                        (self.secondary.clone(), err),
+                    )
+                    .await;
                 let result = self.secondary.execute(metadata, emitter).await;
                 result
-            },
-            res => res
+            }
+            res => res,
         };
         result
     }

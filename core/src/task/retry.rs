@@ -1,10 +1,12 @@
-use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskStartEvent};
+use crate::task::{
+    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskStartEvent,
+};
+use crate::task::{TaskEventEmitter, TaskFrame};
+use async_trait::async_trait;
 use std::fmt::Debug;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
-use async_trait::async_trait;
-use crate::task::{TaskEventEmitter, TaskFrame};
 
 /// Represents a **retriable task frame** which wraps a task frame. This task frame type acts as a
 /// **wrapper node** within the task frame hierarchy, providing a retry mechanism for execution.
@@ -16,8 +18,8 @@ use crate::task::{TaskEventEmitter, TaskFrame};
 ///
 /// # Events
 /// [`RetriableTaskFrame`] provides 2 events, namely ``on_retry_start`` which executes when a retry
-/// happens, it hands out the wrapped task frame instance. As well as the ``on_retry_end`` which 
-/// executes when a retry is finished, it hands out the wrapped task frame instance and an option 
+/// happens, it hands out the wrapped task frame instance. As well as the ``on_retry_end`` which
+/// executes when a retry is finished, it hands out the wrapped task frame instance and an option
 /// error for a potential error it may have gotten from this retry
 ///
 /// # Example
@@ -59,13 +61,13 @@ impl<T: TaskFrame + 'static> RetriableTaskFrame<T> {
     /// Creates a retriable task that has a specified delay per retry
     pub fn new(task: T, retries: NonZeroU32, delay: Duration) -> Self {
         Self {
-            task: Arc::new(task), 
-            retries, 
+            task: Arc::new(task),
+            retries,
             delay,
             on_start: TaskEvent::new(),
             on_end: TaskEvent::new(),
             on_retry_end: TaskEvent::new(),
-            on_retry_start: TaskEvent::new()
+            on_retry_start: TaskEvent::new(),
         }
     }
 
@@ -80,22 +82,40 @@ impl<T: TaskFrame + 'static> TaskFrame for RetriableTaskFrame<T> {
     async fn execute(
         &self,
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
-        emitter: Arc<TaskEventEmitter>
+        emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let mut error: Option<TaskError> = None;
         for i in 0..self.retries.get() {
             if i != 0 {
-                emitter.emit(metadata.clone(), self.on_retry_start.clone(), self.task.clone()).await;
+                emitter
+                    .emit(
+                        metadata.clone(),
+                        self.on_retry_start.clone(),
+                        self.task.clone(),
+                    )
+                    .await;
             }
             let result = self.task.execute(metadata.clone(), emitter.clone()).await;
             match result {
                 Ok(_) => {
-                    emitter.emit(metadata.clone(), self.on_retry_end.clone(), (self.task.clone(), None)).await;
-                    return Ok(())
-                },
+                    emitter
+                        .emit(
+                            metadata.clone(),
+                            self.on_retry_end.clone(),
+                            (self.task.clone(), None),
+                        )
+                        .await;
+                    return Ok(());
+                }
                 Err(err) => {
                     error = Some(err.clone());
-                    emitter.emit(metadata.clone(), self.on_retry_end.clone(), (self.task.clone(), error.clone())).await;
+                    emitter
+                        .emit(
+                            metadata.clone(),
+                            self.on_retry_end.clone(),
+                            (self.task.clone(), error.clone()),
+                        )
+                        .await;
                 }
             }
             tokio::time::sleep(self.delay).await;

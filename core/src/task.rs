@@ -1,17 +1,22 @@
 pub mod execution;
-pub mod sequential;
-pub mod retry;
-pub mod timeout;
 pub mod fallback;
 pub mod parallel;
+pub mod retry;
+pub mod sequential;
+pub mod timeout;
 
 pub use execution::ExecutionTaskFrame;
-pub use sequential::SequentialTaskFrame;
-pub use parallel::ParallelTaskFrame;
-pub use timeout::TimeoutTaskFrame;
 pub use fallback::FallbackTaskFrame;
+pub use parallel::ParallelTaskFrame;
 pub use retry::RetriableTaskFrame;
+pub use sequential::SequentialTaskFrame;
+pub use timeout::TimeoutTaskFrame;
 
+use crate::schedule::TaskSchedule;
+use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
+use arc_swap::ArcSwap;
+use async_trait::async_trait;
+use chrono::{DateTime, Local};
 use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
@@ -20,20 +25,14 @@ use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use arc_swap::ArcSwap;
-use async_trait::async_trait;
-use chrono::{DateTime, Local};
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
-use crate::schedule::TaskSchedule;
-use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
 pub type TaskEndEvent = ArcTaskEvent<Option<TaskError>>;
 pub type ArcTaskEvent<P> = Arc<TaskEvent<P>>;
 pub type TaskError = Arc<dyn Debug + Send + Sync>;
-
 
 /// [`Task`] is one of the core components of Chronolog, it is a composite, and made of several parts,
 /// giving it massive flexibility in terms of customization.
@@ -62,7 +61,7 @@ pub type TaskError = Arc<dyn Debug + Send + Sync>;
 /// it should be supplied for fine-grain error handling. When invoked, the task error handler gets
 /// a context object hosting the exposed metadata and the error. It is meant to return nothing, just
 /// handle the error the task gave away
-/// 
+///
 /// - **[`ScheduleStrategy`]** Defines how it is scheduled and how it handles task overlapping
 /// behavior. By default, (the parameter is optional to define), it runs sequentially. i.e. The task
 /// only reschedules once it is fully finished
@@ -97,12 +96,12 @@ pub struct Task {
         setter(transform = |s: impl TaskErrorHandler + 'static| Arc::new(s) as Arc<dyn TaskErrorHandler>)
     )]
     pub(crate) error_handler: Arc<dyn TaskErrorHandler>,
-    
+
     #[builder(
         default = Arc::new(SequentialSchedulingPolicy),
         setter(transform = |s: impl ScheduleStrategy + 'static| Arc::new(s) as Arc<dyn ScheduleStrategy>)
     )]
-    pub(crate) overlap_policy: Arc<dyn ScheduleStrategy>
+    pub(crate) overlap_policy: Arc<dyn ScheduleStrategy>,
 }
 
 impl Task {
@@ -137,7 +136,7 @@ impl Task {
     pub fn error_handler(&self) -> Arc<dyn TaskErrorHandler> {
         self.error_handler.clone()
     }
-    
+
     /// Gets the overlapping policy for outside parties
     pub fn overlap_policy(&self) -> Arc<dyn ScheduleStrategy> {
         self.overlap_policy.clone()
@@ -162,17 +161,22 @@ impl Task {
 /// scheduler, overlapping policies and the task frame. Outside parties can listen to the event at any
 /// time they would like
 pub struct TaskEvent<P> {
-    listeners: RwLock<HashMap<Uuid, Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>, &P) + Send + Sync>>>
+    listeners: RwLock<HashMap<Uuid, Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>, &P) + Send + Sync>>>,
 }
 
 impl<P: Send + 'static> TaskEvent<P> {
     /// Creates a task event, containing no listeners
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { listeners: RwLock::new(HashMap::new()) })
+        Arc::new(Self {
+            listeners: RwLock::new(HashMap::new()),
+        })
     }
 
     /// Subscribes a listener to the task event, returning an identifier for that listener / subscriber
-    pub async fn subscribe(&self, func: impl Fn(Arc<dyn ExposedTaskMetadata>, &P) + Send + Sync + 'static) -> Uuid {
+    pub async fn subscribe(
+        &self,
+        func: impl Fn(Arc<dyn ExposedTaskMetadata>, &P) + Send + Sync + 'static,
+    ) -> Uuid {
         let id = Uuid::new_v4();
         self.listeners.write().await.insert(id, Arc::new(func));
         id
@@ -187,11 +191,18 @@ impl<P: Send + 'static> TaskEvent<P> {
 /// [`TaskEventEmitter`] is a sealed mechanism to allow the use of emitting events, by itself
 /// it doesn't hot any data, but it unlocks the use of [`TaskEventEmitter::emit`].
 /// The reason for this is to prevent any emissions from outside parties on events
-pub struct TaskEventEmitter { pub(crate) _private: () }
+pub struct TaskEventEmitter {
+    pub(crate) _private: (),
+}
 
 impl TaskEventEmitter {
     /// Emits the event, notifying all subscribers / listeners
-    pub async fn emit<P: Send + Sync>(&self, metadata: Arc<dyn ExposedTaskMetadata>, event: Arc<TaskEvent<P>>, payload: P) {
+    pub async fn emit<P: Send + Sync>(
+        &self,
+        metadata: Arc<dyn ExposedTaskMetadata>,
+        event: Arc<TaskEvent<P>>,
+        payload: P,
+    ) {
         let listeners = &*event.listeners.read().await;
         match listeners.len() {
             0 => {}
@@ -223,10 +234,10 @@ pub trait ExposedTaskMetadata: Send + Sync {
     fn debug_label(&self) -> &str;
     fn remaining_runs(&self) -> Option<NonZeroU64> {
         match self.max_runs() {
-            Some(max_runs) => Some(
-                NonZeroU64::new(max_runs.get().saturating_sub(self.runs())).unwrap()
-            ),
-            None => None
+            Some(max_runs) => {
+                Some(NonZeroU64::new(max_runs.get().saturating_sub(self.runs())).unwrap())
+            }
+            None => None,
         }
     }
 }
@@ -266,7 +277,7 @@ pub trait TaskMetadata: Send + Sync {
 
     /// Reads the debug label of the task
     fn debug_label(&self) -> &str;
-    
+
     /// Returns an exposed set of the task metadata
     fn as_exposed(&self) -> Arc<dyn ExposedTaskMetadata + Send + Sync>;
 }
@@ -347,14 +358,14 @@ impl TaskMetadata for DefaultTaskMetadata {
     fn debug_label(&self) -> &str {
         &self.debug_label
     }
-    
+
     fn as_exposed(&self) -> Arc<dyn ExposedTaskMetadata + Send + Sync> {
         let loaded = self.last_execution.load().clone();
         Arc::new(DefaultTaskMetadataExposed {
             max_runs: self.max_runs.clone(),
             runs: self.runs.load(Ordering::Relaxed),
             last_execution: loaded.clone(),
-            debug_label: self.debug_label.clone()
+            debug_label: self.debug_label.clone(),
         })
     }
 }
@@ -390,7 +401,7 @@ pub trait TaskFrame: Send + Sync {
     async fn execute(
         &self,
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
-        emitter: Arc<TaskEventEmitter>
+        emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError>;
 
     fn on_start(&self) -> TaskStartEvent;

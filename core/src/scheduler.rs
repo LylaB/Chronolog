@@ -1,19 +1,20 @@
-use tokio::sync::RwLock;
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::task::{Task, TaskEventEmitter};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use nohash_hasher::IntMap;
 use once_cell::sync::Lazy;
+use std::cmp::{Ordering, Reverse};
+use std::collections::BinaryHeap;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep_until, Instant};
-use crate::task::{Task, TaskEventEmitter};
+use tokio::time::{Instant, sleep_until};
 
-pub static CHRONOLOG_SCHEDULER: Lazy<Arc<ChronologScheduler>> = Lazy::new(|| ChronologScheduler::new());
+pub static CHRONOLOG_SCHEDULER: Lazy<Arc<ChronologScheduler>> =
+    Lazy::new(|| ChronologScheduler::new());
 
 pub(crate) struct ScheduledItem(pub(crate) usize, pub(crate) DateTime<Local>);
 
@@ -112,7 +113,7 @@ impl ChronologScheduler {
         Arc::new(Self {
             tasks: RwLock::new(IntMap::default()),
             earliest_sorted: Mutex::new(BinaryHeap::new()),
-            task_process: ArcSwapOption::from_pointee(None)
+            task_process: ArcSwapOption::from_pointee(None),
         })
     }
 }
@@ -121,8 +122,8 @@ impl ChronologScheduler {
 impl Scheduler for ChronologScheduler {
     async fn main(self: &'static Arc<Self>, emitter: Arc<TaskEventEmitter>) {
         let this = self.clone();
-        self.task_process.store(Some(Arc::new(
-            tokio::spawn(async move {
+        self.task_process
+            .store(Some(Arc::new(tokio::spawn(async move {
                 loop {
                     let mut heap = this.earliest_sorted.lock().await;
                     if let Some(Reverse(scheduled_item)) = heap.pop() {
@@ -144,24 +145,28 @@ impl Scheduler for ChronologScheduler {
                             let policy = task.overlap_policy();
                             let last_exec = policy.handle(task.clone(), emitter.clone()).await;
                             task.metadata.last_execution().swap(Arc::new(last_exec));
-                            let runs = task.metadata.runs().load(std::sync::atomic::Ordering::Relaxed);
+                            let runs = task
+                                .metadata
+                                .runs()
+                                .load(std::sync::atomic::Ordering::Relaxed);
                             match max_runs {
-                                Some(m) if runs == m.get() => {continue},
+                                Some(m) if runs == m.get() => continue,
                                 _ => {}
                             };
                             (task.schedule(), last_exec)
                         };
                         let mut future_time = schedule.next_after(&last_exec).unwrap();
                         if (future_time - last_exec).subsec_millis() < 5 {
-                            future_time = schedule.next_after(&(future_time + chrono::Duration::milliseconds(5))).unwrap();
+                            future_time = schedule
+                                .next_after(&(future_time + chrono::Duration::milliseconds(5)))
+                                .unwrap();
                         }
                         let mut heap = this.earliest_sorted.lock().await;
                         heap.push(Reverse(ScheduledItem(scheduled_item.0, future_time)));
                         drop(heap);
                     }
                 }
-            })
-        )));
+            }))));
     }
 
     async fn register(self: &Arc<Self>, task: Task) -> usize {

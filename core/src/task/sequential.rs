@@ -1,9 +1,12 @@
+use crate::policy_match;
+use crate::task::parallel::ParallelTaskFrame;
+use crate::task::{
+    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
+    TaskFrame, TaskStartEvent,
+};
+use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
-use async_trait::async_trait;
-use crate::policy_match;
-use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
-use crate::task::parallel::ParallelTaskFrame;
 
 /// Defines a policy set for the [`SequentialTaskFrame`], these change the behavior of how the
 /// parallel task frame operates, by default the parallel policy
@@ -12,12 +15,12 @@ pub enum SequentialTaskPolicy {
     /// Runs a task frame and its results do not affect the [`SequentialTaskFrame`]
     RunSilenceFailures,
 
-    /// Runs a task frame, if it succeeds then it halts the other task frames and 
+    /// Runs a task frame, if it succeeds then it halts the other task frames and
     /// halts [`SequentialTaskFrame`], if not then it ignores the results and continues
     RunUntilSuccess,
 
-    /// Runs a task frame, if it fails then it halts the other task frames and 
-    /// returns the error, halting [`SequentialTaskFrame`], if not then it ignores the results 
+    /// Runs a task frame, if it fails then it halts the other task frames and
+    /// returns the error, halting [`SequentialTaskFrame`], if not then it ignores the results
     /// and continues
     RunUntilFailure,
 }
@@ -28,10 +31,10 @@ pub enum SequentialTaskPolicy {
 /// previous task frame finishing. The order of execution is ordered, and thus why its sequential,
 /// in the case where execution order does not matter and tasks do not require sequential execution,
 /// it is advised to use [`ParallelTaskFrame`] as opposed to [`SequentialTaskFrame`]
-/// 
+///
 /// # Events
 /// For events, [`SequentialTaskFrame`] has 2 of them, these being `on_child_start` and `on_child_end`,
-/// the former is for when a child task frame is about to start, the event hands out the target task 
+/// the former is for when a child task frame is about to start, the event hands out the target task
 /// frame. For the latter, it is for when a child task frame ends, the event hands out the target
 /// task frame and an optional error in case it fails
 ///
@@ -89,8 +92,11 @@ impl SequentialTaskFrame {
     pub fn new(tasks: Vec<Arc<dyn TaskFrame>>) -> SequentialTaskFrame {
         Self::new_with(tasks, SequentialTaskPolicy::RunSilenceFailures)
     }
-    
-    pub fn new_with(tasks: Vec<Arc<dyn TaskFrame>>, sequential_policy: SequentialTaskPolicy) -> SequentialTaskFrame {
+
+    pub fn new_with(
+        tasks: Vec<Arc<dyn TaskFrame>>,
+        sequential_policy: SequentialTaskPolicy,
+    ) -> SequentialTaskFrame {
         Self {
             tasks,
             policy: sequential_policy,
@@ -107,10 +113,13 @@ impl TaskFrame for SequentialTaskFrame {
     async fn execute(
         &self,
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
-        emitter: Arc<TaskEventEmitter>
+        emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         for task in self.tasks.iter() {
-            emitter.clone().emit(metadata.clone(), self.on_child_start.clone(), task.clone()).await;
+            emitter
+                .clone()
+                .emit(metadata.clone(), self.on_child_start.clone(), task.clone())
+                .await;
             let result = task.execute(metadata.clone(), emitter.clone()).await;
             policy_match!(metadata, emitter, task, self, result, SequentialTaskPolicy);
         }

@@ -1,9 +1,12 @@
+use crate::policy_match;
+use crate::task::{
+    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
+    TaskFrame, TaskStartEvent, sequential::SequentialTaskFrame,
+};
+use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
-use async_trait::async_trait;
 use tokio::sync::mpsc;
-use crate::policy_match;
-use crate::task::{sequential::SequentialTaskFrame, ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
 
 /// Defines a policy set for the [`ParallelTaskFrame`], these change the behavior of how the
 /// parallel task frame operates, by default the parallel policy
@@ -91,7 +94,10 @@ impl ParallelTaskFrame {
         Self::new_with(tasks, ParallelTaskPolicy::RunSilenceFailures)
     }
 
-    pub fn new_with(tasks: Vec<Arc<dyn TaskFrame>>, parallel_task_policy: ParallelTaskPolicy) -> Self {
+    pub fn new_with(
+        tasks: Vec<Arc<dyn TaskFrame>>,
+        parallel_task_policy: ParallelTaskPolicy,
+    ) -> Self {
         Self {
             tasks,
             policy: parallel_task_policy,
@@ -108,13 +114,17 @@ impl TaskFrame for ParallelTaskFrame {
     async fn execute(
         &self,
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
-        emitter: Arc<TaskEventEmitter>
+        emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let (result_tx, mut result_rx) = mpsc::unbounded_channel();
 
         match self.tasks.len() {
             0 => {}
-            1 => self.tasks[0].execute(metadata.clone(), emitter.clone()).await?,
+            1 => {
+                self.tasks[0]
+                    .execute(metadata.clone(), emitter.clone())
+                    .await?
+            }
             _ => {
                 std::thread::scope(|s| {
                     for frame in self.tasks.iter() {
@@ -125,8 +135,13 @@ impl TaskFrame for ParallelTaskFrame {
                         let child_start = self.on_child_start.clone();
                         s.spawn(move || {
                             tokio::spawn(async move {
-                                emitter_clone.clone().emit(metadata_clone.clone(), child_start, frame_clone.clone()).await;
-                                let result = frame_clone.execute(metadata_clone, emitter_clone.clone()).await;
+                                emitter_clone
+                                    .clone()
+                                    .emit(metadata_clone.clone(), child_start, frame_clone.clone())
+                                    .await;
+                                let result = frame_clone
+                                    .execute(metadata_clone, emitter_clone.clone())
+                                    .await;
                                 let _ = result_tx.send((frame_clone, result));
                             })
                         });
