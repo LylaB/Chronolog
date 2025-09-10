@@ -1,48 +1,72 @@
 use std::fmt::Debug;
-use crate::task::{Arc, TaskFrame, TaskMetadata};
+use crate::task::{Arc, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
 use async_trait::async_trait;
 
-/// Represents a **task** that directly hosts and executes a function. This task type acts as
-/// a **leaf node** within the task hierarchy. Its primary role is to serve as the final unit of
-/// execution in a task workflow, as it only encapsulates a single function / future to be executed,
-/// no further tasks can be chained or derived from it
+/// Represents an **execution task frame** that directly hosts and executes a function. This task frame type 
+/// acts asa **leaf node** within the task frame hierarchy. Its primary role is to serve as the final
+/// unit of execution in a task workflow, as it only encapsulates a single function / future to be 
+/// executed, no further tasks can be chained or derived from it
+/// 
+/// # Events
+/// When it comes to events, [`ExecutionTaskFrame`] comes with the default set of events, as
+/// there is nothing else to listen for / subscribe to
 ///
-/// ### Example
+/// # Example
 /// ```ignore
-/// use std::time::Duration;
-/// use chronolog::schedule::ScheduleInterval;
-/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
-/// use chronolog::task::execution::ExecutionTask;
+/// use chronolog_core::schedule::TaskScheduleInterval;
+/// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog_core::task::execution::ExecutionTaskFrame;
+/// use chronolog_core::task::Task;
 ///
-/// let task = ExecutionTask::builder()
-///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
-///     .func(|_metadata| async {
+/// let task_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
 ///         println!("Hello from an execution task!");
 ///         Ok(())
-///     })
-///     .build();
+///     }
+/// );
 ///
+/// let task = Task::define(TaskScheduleInterval::from_secs(2), task_frame);
 /// CHRONOLOG_SCHEDULER.register(task).await;
 /// ```
-pub struct ExecutionTaskFrame<F: Send + Sync>(F);
+pub struct ExecutionTaskFrame<F: Send + Sync> {
+    func: F,
+    on_start: TaskStartEvent,
+    on_end: TaskEndEvent
+}
 
 impl<F, Fut> ExecutionTaskFrame<F>
 where
-    Fut: Future<Output = Result<(), Arc<dyn Debug + Send + Sync>>> + Send,
-    F: Fn(&dyn TaskMetadata) -> Fut + Send + Sync
+    Fut: Future<Output = Result<(), TaskError>> + Send,
+    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync
 {
     pub fn new(func: F) -> Self {
-        ExecutionTaskFrame(func)
+        ExecutionTaskFrame {
+            func,
+            on_start: TaskEvent::new(),
+            on_end: TaskEvent::new()
+        }
     }
 }
 
 #[async_trait]
 impl<F, Fut> TaskFrame for ExecutionTaskFrame<F>
 where
-    Fut: Future<Output = Result<(), Arc<dyn Debug + Send + Sync>>> + Send,
-    F: Fn(&dyn TaskMetadata) -> Fut + Send + Sync
+    Fut: Future<Output = Result<(), TaskError>> + Send,
+    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync
 {
-    async fn execute(&self, metadata: &(dyn TaskMetadata + Send + Sync)) -> Result<(), Arc<dyn Debug + Send + Sync>> {
-        self.0(metadata).await
+    async fn execute(
+        &self,
+        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        _emitter: Arc<TaskEventEmitter>
+    ) -> Result<(), TaskError> {
+        (self.func)(metadata).await
+    }
+
+    fn on_start(&self) -> TaskStartEvent {
+        self.on_start.clone()
+    }
+
+    fn on_end(&self) -> TaskEndEvent {
+        self.on_end.clone()
     }
 }
