@@ -1,14 +1,14 @@
 use tokio::sync::RwLock;
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
-use arc_swap::{ArcSwapOption};
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use nohash_hasher::IntMap;
 use once_cell::sync::Lazy;
-use tokio::sync::{Mutex};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
 use crate::task::{Task, TaskEventEmitter};

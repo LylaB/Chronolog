@@ -1,4 +1,4 @@
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use thiserror::Error;
 use crate::task::TaskError;
 

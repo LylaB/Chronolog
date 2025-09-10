@@ -1,6 +1,6 @@
 use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskStartEvent};
 use std::fmt::Debug;
-use std::num::{NonZeroU32};
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 use async_trait::async_trait;
