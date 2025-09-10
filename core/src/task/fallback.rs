@@ -1,73 +1,102 @@
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::sync::{Arc};
 use async_trait::async_trait;
-use crate::task::{TaskFrame, TaskMetadata};
+use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
 
-/// Represents a **fallback task** which wraps two other tasks. This task type acts as a
-/// **composite node** within the task hierarchy, providing a failover mechanism for execution.
+/// Represents a **fallback task frame** which wraps two other task frames. This task frame type acts as a
+/// **composite node** within the task frame hierarchy, providing a failover mechanism for execution.
 ///
-/// ### Behavior
-/// - Executes the **primary task** first.
-/// - If the primary task completes successfully, the fallback task is **skipped**.
-/// - If the primary task **fails**, the **secondary task** is executed as a fallback.
+/// # Behavior
+/// - Executes the **primary task frame** first.
+/// - If the primary task frame completes successfully, the fallback task frame is **skipped**.
+/// - If the primary task frame **fails**, the **secondary task frame** is executed as a fallback.
 ///
+/// # Events
+/// [`FallbackTaskFrame`] includes one event for when the fallback is triggered. Handing out the fallback
+/// task frame instance being executed as well as the task error which can be accessed via the `on_fallback`
+/// field
+/// 
 /// # Example
 /// ```ignore
-/// use std::time::Duration;
-/// use chronolog::schedule::ScheduleInterval;
-/// use chronolog::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
-/// use chronolog::task::fallback::FallbackTask;
-/// use chronolog::task::execution::ExecutionTask;
+/// use chronolog_core::schedule::TaskScheduleInterval;
+/// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog_core::task::execution::ExecutionTaskFrame;
+/// use chronolog_core::task::{FallbackTaskFrame, Task};
 ///
-/// let primary_task = ExecutionTask::builder()
-///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
-///     .func(|_metadata| async {
-///         println!("Trying primary task...");
+/// let primary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Trying primary task frame...");
 ///         Err::<(), ()>(())
-///     })
-///     .build();
+///     }
+/// );
 ///
-/// let secondary_task = ExecutionTask::builder()
-///     .schedule(ScheduleInterval::duration(Duration::from_secs(2)))
-///     .func(|_metadata| async {
-///         println!("Primary failed, running fallback task!");
+/// let secondary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Primary failed, running fallback task frame!");
 ///         Ok::<(), ()>(())
-///     })
-///     .build();
+///     }
+/// );
+/// 
+/// let fallback_frame = FallbackTaskFrame::new(primary_frame, secondary_frame);
 ///
-/// let fallback_task = FallbackTask::builder()
-///     .primary(primary_task)
-///     .fallback(secondary_task)
-///     .build();
-///
-/// CHRONOLOG_SCHEDULER.register(fallback_task).await;
+/// let task = Task::define(TaskScheduleInterval::from_secs(1), fallback_frame);
+/// CHRONOLOG_SCHEDULER.register(task).await;
 /// ```
-pub struct FallbackTask<T: 'static, T2: 'static>(T, T2);
+pub struct FallbackTaskFrame<T: 'static, T2: 'static> {
+    primary: T,
+    secondary: Arc<T2>,
+    on_start: TaskStartEvent,
+    on_end: TaskEndEvent,
+    pub on_fallback: ArcTaskEvent<(Arc<T2>, TaskError)>
+}
 
-impl<T, T2> FallbackTask<T, T2>
+impl<T, T2> FallbackTaskFrame<T, T2>
 where
     T: TaskFrame + 'static,
     T2: TaskFrame + 'static,
 {
     pub fn new(primary: T, secondary: T2) -> Self {
-        Self(primary, secondary)
+        Self {
+            primary,
+            secondary: Arc::new(secondary),
+            on_start: TaskEvent::new(),
+            on_end: TaskEvent::new(),
+            on_fallback: TaskEvent::new()
+        }
     }
 }
 
 #[async_trait]
-impl<T, T2> TaskFrame for FallbackTask<T, T2>
+impl<T, T2> TaskFrame for FallbackTaskFrame<T, T2>
 where
     T: TaskFrame + 'static,
     T2: TaskFrame + 'static,
 {
-    async fn execute(&self, metadata: &(dyn TaskMetadata + Send + Sync)) -> Result<(), Arc<dyn Debug + Send + Sync>> {
-        let result = match self.0.execute(metadata).await {
-            Err(_) => {
-                let result = self.1.execute(metadata).await;
+    async fn execute(
+        &self,
+        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        emitter: Arc<TaskEventEmitter>,
+    ) -> Result<(), TaskError> {
+        let result = match self.primary.execute(metadata.clone(), emitter.clone()).await {
+            Err(err) => {
+                emitter.emit(
+                    metadata.clone(),
+                    self.on_fallback.clone(),
+                    (self.secondary.clone(), err)
+                ).await;
+                let result = self.secondary.execute(metadata, emitter).await;
                 result
             },
             res => res
         };
         result
+    }
+
+    fn on_start(&self) -> TaskStartEvent {
+        self.on_start.clone()
+    }
+
+    fn on_end(&self) -> TaskEndEvent {
+        self.on_end.clone()
     }
 }
