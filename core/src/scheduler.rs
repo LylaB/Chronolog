@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::{Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
-use crate::task::{Task};
+use crate::task::{Task, TaskEventEmitter};
 
 pub static CHRONOLOG_SCHEDULER: Lazy<Arc<ChronologScheduler>> = Lazy::new(|| ChronologScheduler::new());
 
@@ -38,15 +38,18 @@ impl Ord for ScheduledItem {
 }
 
 /// The [`Scheduler`] trait defines a basis for what a scheduler is, a scheduler is the actual mechanism
-/// that drives the execution of multiple [`TaskUnit`] structs in specific times the tasks request,
+/// that drives the execution of multiple [`Task`] structs in specific times the tasks request,
 /// typically this is mainly for extensibility. In most scenarios, the default global scheduler
 /// which is [`CHRONOLOG_SCHEDULER`] or the struct [`ChronologScheduler`] can be used for the scheduling logic
 ///
 /// All methods are async and in addition, require `&Arc<Self>` as opposed to typical `&self`,
 /// for multi-thread and ergonomic reasons
 ///
-/// Schedulers do not start by default, they explicitly require the developer to call [`Scheduler::start`] to
-/// start it, schedulers can also be aborted via the method [`Scheduler::abort`]
+/// The main internal logic side of the scheduler is [`Scheduler::main`], it cannot be called from any
+/// outsiders as it requires an event emitter, created inside the [`Scheduler::start`] method,
+/// by design, schedulers explicitly require the developer to call [`Scheduler::start`] to start it,
+/// schedulers can also be aborted via the method [`Scheduler::abort`], do note that the
+/// [`Scheduler::start`] **should not be overridden, due to the event emitter**
 ///
 /// For registering and removing tasks, the following methods may be used
 /// - [`Scheduler::register`] Registers a task to the scheduler, tasks can be inserted at any time
@@ -58,9 +61,14 @@ impl Ord for ScheduledItem {
 ///
 /// - [`Scheduler::clear`] Removes / clears all tasks the scheduler has registered
 #[async_trait]
-pub trait Scheduler {
+pub trait Scheduler: 'static + Send + Sync {
     /// Start the scheduler, if the scheduler is already started, then do nothing
-    async fn start(self: &'static Arc<Self>);
+    async fn start(self: &'static Arc<Self>) {
+        let emitter = Arc::new(TaskEventEmitter { _private: () });
+        self.main(emitter).await;
+    }
+
+    async fn main(self: &'static Arc<Self>, emitter: Arc<TaskEventEmitter>);
 
     /// Register a task on the scheduler, returning an index pointing to the task
     async fn register(self: &Arc<Self>, task: Task) -> usize;
@@ -99,6 +107,7 @@ pub struct ChronologScheduler {
 }
 
 impl ChronologScheduler {
+    /// Creates a brand-new default scheduler implementation instance
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             tasks: RwLock::new(IntMap::default()),
@@ -110,7 +119,7 @@ impl ChronologScheduler {
 
 #[async_trait]
 impl Scheduler for ChronologScheduler {
-    async fn start(self: &'static Arc<Self>) {
+    async fn main(self: &'static Arc<Self>, emitter: Arc<TaskEventEmitter>) {
         let this = self.clone();
         self.task_process.store(Some(Arc::new(
             tokio::spawn(async move {
@@ -131,20 +140,16 @@ impl Scheduler for ChronologScheduler {
                                 now_tokio + Duration::from_millis(delta.num_milliseconds() as u64)
                             };
                             sleep_until(target_time).await;
-                            let runs = task.metadata.run_count()
-                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                            let last_exec = Local::now();
-                            task.metadata.last_exec().swap(Arc::new(last_exec));
                             let max_runs = task.metadata.max_runs();
-                            let policy = task.metadata.overlap_policy();
-                            dbg!("TEST START");
-                            policy.handle(task.clone()).await;
-                            dbg!("TEST END");
+                            let policy = task.overlap_policy();
+                            let last_exec = policy.handle(task.clone(), emitter.clone()).await;
+                            task.metadata.last_execution().swap(Arc::new(last_exec));
+                            let runs = task.metadata.runs().load(std::sync::atomic::Ordering::Relaxed);
                             match max_runs {
                                 Some(m) if runs == m.get() => {continue},
                                 _ => {}
                             };
-                            (task.schedule.clone(), last_exec)
+                            (task.schedule(), last_exec)
                         };
                         let mut future_time = schedule.next_after(&last_exec).unwrap();
                         if (future_time - last_exec).subsec_millis() < 5 {
@@ -161,7 +166,7 @@ impl Scheduler for ChronologScheduler {
 
     async fn register(self: &Arc<Self>, task: Task) -> usize {
         let last_exec = Local::now();
-        let future_time = task.schedule.next_after(&last_exec).unwrap();
+        let future_time = task.schedule().next_after(&last_exec).unwrap();
         let id: usize = {
             let mut tasks = self.tasks.write().await;
             let id = tasks.len();
