@@ -1,11 +1,13 @@
 pub mod interval;
 pub mod calendar;
 pub mod cron;
+pub mod immediate;
 
 pub use crate::schedule::interval::TaskScheduleInterval;
 pub use crate::schedule::calendar::TaskScheduleCalendar;
 pub use crate::schedule::calendar::TaskCalendarField;
 pub use crate::schedule::cron::TaskScheduleCron;
+pub use crate::schedule::immediate::TaskScheduleImmediate;
 
 use std::error::Error;
 use std::sync::Arc;
