@@ -54,3 +54,29 @@ impl TaskSchedule for TaskScheduleInterval {
         Ok(time.add(self.0))
     }
 }
+
+macro_rules! integer_from_impl {
+    ($val: ty) => {
+        impl From<$val> for TaskScheduleInterval {
+            fn from(value: $val) -> Self {
+                TaskScheduleInterval(TimeDelta::seconds(value as i64))
+            }
+        }
+    };
+}
+
+integer_from_impl!(u8);
+integer_from_impl!(u16);
+integer_from_impl!(u32);
+
+impl From<f64> for TaskScheduleInterval {
+    fn from(value: f64) -> Self {
+        TaskScheduleInterval::from_secs_f64(value)
+    }
+}
+
+impl From<f32> for TaskScheduleInterval {
+    fn from(value: f32) -> Self {
+        TaskScheduleInterval::from_secs_f64(value as f64)
+    }
+}
