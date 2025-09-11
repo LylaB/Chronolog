@@ -1,5 +1,5 @@
 <h1 align="center">Chronolog (Scheduling Library)</h1>
-<img src="assets/Chronolog Banner.svg" />
+<img src="./assets/Chronolog Banner.png" alt="Chronolog Banner" />
 
 > [!IMPORTANT]  
 > The project is in its infancy, it is not out there, as its being worked on and crafted meticulously. If you plan to
@@ -20,7 +20,7 @@ Schedule thousands of tasks with the efficiency of rust while still using it in 
 such as <u>Python</u>, <u>Rust</u>, <u>Javascript(and Typescript)</u> and even <u>Java</u>. The library is designed to be
 as easy to use as possible while being powerful, flexible and extendable
 
-<img align="center" src="assets/Chronolog Divider.svg" />
+<img align="center" src="assets/Chronolog Divider.png" />
 Since Chronolog is a fully featured scheduling library, it provides many features out of the box by default:
 
 ## 🧩 Task Composition
@@ -79,7 +79,7 @@ Emit a task in python, listen to task events in javascript, write task logic in 
 work around the limitation of a library/framework being limited to one specific programming language. Chronolog is
 the central hub for scheduling
 
-<img align="center" src="assets/Chronolog Divider.svg" />
+<img align="center" src="assets/Chronolog Divider.png" />
 Why use chronolog when other scheduling libraries exist in other programming languages? Some of the highlights / strength points
 which you might consider to use chronolog over other scheduling libraries are:
 
@@ -106,6 +106,6 @@ frequent scheduled tasks, it maintains this precision even when clogged by multi
 <br /> <br />
 - **📦 Tiny But Mighty** Tired of large sized packages, taking forever to compile, consuming disk space and so on? We too,
 as such, Chronolog is tiny about **~1MB** in size
-<img align="center" src="assets/Chronolog Divider.svg" />
+<img align="center" src="assets/Chronolog Divider.png" />
 When it comes to contributing and forking. Chronolog is free and open source to use, only restricted by the lightweight
-**Apache License v2.0**. Contributions are welcome with wide open arms, chronolog is looking to foster a community
+**Apache License v2.0** <strong>(this license only applies to when the project enters beta)</strong>. Contributions are welcome with wide open arms, chronolog is looking to foster a community
