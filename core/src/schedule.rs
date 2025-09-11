@@ -1,17 +1,17 @@
-pub mod interval;
 pub mod calendar;
 pub mod cron;
 pub mod immediate;
+pub mod interval;
 
-pub use crate::schedule::interval::TaskScheduleInterval;
-pub use crate::schedule::calendar::TaskScheduleCalendar;
 pub use crate::schedule::calendar::TaskCalendarField;
+pub use crate::schedule::calendar::TaskScheduleCalendar;
 pub use crate::schedule::cron::TaskScheduleCron;
 pub use crate::schedule::immediate::TaskScheduleImmediate;
+pub use crate::schedule::interval::TaskScheduleInterval;
 
+use chrono::{DateTime, Local};
 use std::error::Error;
 use std::sync::Arc;
-use chrono::{DateTime, Local};
 
 /// The [`TaskSchedule`] trait defines when a task should be executed, by default they can be in 3 forms:
 /// - [`TaskScheduleInterval`] executes a task on an interval basis
