@@ -366,7 +366,7 @@ impl TaskMetadata for DefaultTaskMetadata {
     fn as_exposed(&self) -> Arc<dyn ExposedTaskMetadata + Send + Sync> {
         let loaded = self.last_execution.load().clone();
         Arc::new(DefaultTaskMetadataExposed {
-            max_runs: self.max_runs.clone(),
+            max_runs: self.max_runs,
             runs: self.runs.load(Ordering::Relaxed),
             last_execution: loaded.clone(),
             debug_label: self.debug_label.clone(),
