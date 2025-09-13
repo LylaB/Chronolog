@@ -1,7 +1,7 @@
 use crate::policy_match;
 use crate::task::{
     ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
-    TaskFrame, TaskStartEvent, sequential::SequentialTaskFrame,
+    TaskFrame, TaskStartEvent, sequentialframe::SequentialTaskFrame,
 };
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -43,8 +43,8 @@ pub enum ParallelTaskPolicy {
 /// use std::sync::Arc;
 /// use chronolog_core::schedule::TaskScheduleInterval;
 /// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
-/// use chronolog_core::task::execution::ExecutionTaskFrame;
-/// use chronolog_core::task::parallel::ParallelTask;
+/// use chronolog_core::task::executionframe::ExecutionTaskFrame;
+/// use chronolog_core::task::parallelframe::ParallelTask;
 /// use chronolog_core::task::Task;
 ///
 /// let primary_frame = ExecutionTaskFrame::new(
