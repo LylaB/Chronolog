@@ -1,16 +1,20 @@
-pub mod execution;
-pub mod fallback;
-pub mod parallel;
-pub mod retry;
-pub mod sequential;
-pub mod timeout;
+pub mod executionframe;
+pub mod fallbackframe;
+pub mod parallelframe;
+pub mod retryframe;
+pub mod sequentialframe;
+pub mod timeoutframe;
+pub mod selectframe;
+pub mod conditionframe;
 
-pub use execution::ExecutionTaskFrame;
-pub use fallback::FallbackTaskFrame;
-pub use parallel::ParallelTaskFrame;
-pub use retry::RetriableTaskFrame;
-pub use sequential::SequentialTaskFrame;
-pub use timeout::TimeoutTaskFrame;
+pub use executionframe::ExecutionTaskFrame;
+pub use fallbackframe::FallbackTaskFrame;
+pub use parallelframe::ParallelTaskFrame;
+pub use retryframe::RetriableTaskFrame;
+pub use sequentialframe::SequentialTaskFrame;
+pub use timeoutframe::TimeoutTaskFrame;
+pub use selectframe::SelectTaskFrame;
+pub use conditionframe::ConditionalFrame;
 
 use crate::schedule::TaskSchedule;
 use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
@@ -383,18 +387,18 @@ impl TaskMetadata for DefaultTaskMetadata {
 ///     as adding retry mechanism via [`RetryFrame`], adding timeout via [`TimeoutFrame`]... etc.
 ///
 ///     ## Examples Of Frame Decorators
-///     - **``RetryFrame<TimeoutFrame<T>>``**: Execute task `T`, when the task succeeds within a maximum
-///     duration of `D` (can be controlled by the developer) then finish, otherwise
-///     if it exceeds its maximum duration or if the task failed then abort it and retry it again,
-///     repeating this process `N` times (can be controlled by the developer) with a delay per task
-///     (can be controlled by the developer) `d`
+///     - **``RetriableTaskFrame<TimeoutTaskFrame<T>>``**: Execute task frame `T`, when the
+///     task frame succeeds within a maximum duration of `D` (can be controlled by the developer)
+///     then finish, otherwise if it exceeds its maximum duration or if the task frame failed then
+///     abort it and retry it again, repeating this process `N` times (can be controlled by the developer)
+///     with a delay per retry (can be controlled by the developer) `d`
 ///
-///     - **``FallbackFrame<Timeout<T1>, RetryFrame<T2>>``**: Execute task `T1`, when the task succeeds within
-///     a maximum duration of `D` (can be controlled by the developer) then finish, otherwise if it
-///     either fails or it reaches its maximum duration then execute task `T2` (as a fallback), try/retry
-///     executing this task for `N` times (can be controlled by the developer) with a delay per retry of
-///     `d` (can be controlled by the developer), regardless if it succeeds at some time or fails entirely,
-///     return the result back
+///     - **``FallbackTaskFrame<TimeoutTaskFrame<T1>, RetriableTaskFrame<T2>>``**: Execute task frame `T1`,
+///     when the task frame succeeds within a maximum duration of `D` (can be controlled by the developer)
+///     then finish, otherwise if it either fails or it reaches its maximum duration then execute
+///     task frame `T2` (as a fallback), try/retry executing this task frame for `N` times (can be
+///     controlled by the developer) with a delay per retry of `d` (can be controlled by the developer),
+///     regardless if it succeeds at some time or fails entirely, return the result back
 #[async_trait]
 pub trait TaskFrame: Send + Sync {
     /// The main execution logic of the task, it is meant as an internal method
