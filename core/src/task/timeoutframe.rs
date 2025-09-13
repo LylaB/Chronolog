@@ -28,8 +28,8 @@ use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, Ta
 /// use tokio::time::sleep;
 /// use chronolog_core::schedule::TaskScheduleInterval;
 /// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
-/// use chronolog_core::task::timeout::TimeoutTaskFrame;
-/// use chronolog_core::task::execution::ExecutionTaskFrame;
+/// use chronolog_core::task::timeoutframe::TimeoutTaskFrame;
+/// use chronolog_core::task::executionframe::ExecutionTaskFrame;
 /// use chronolog_core::task::Task;
 ///
 /// let exec_frame = ExecutionTaskFrame::new(
