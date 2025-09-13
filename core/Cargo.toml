@@ -18,3 +18,4 @@ nohash-hasher = "0.2.0"
 chrono = { version = "0.4.41", features = ["now"] }
 cron-parser = "0.10.0"
 uuid = { version = "1.18.1", features = ["v4"] }
+rand = { version = "0.10.0-rc.0", features = ["small_rng"] }
