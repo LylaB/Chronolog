@@ -90,10 +90,10 @@ impl<T: TaskFrame + 'static> TaskFrame for TimeoutTaskFrame<T> {
     }
 
     fn on_start(&self) -> TaskStartEvent {
-        todo!()
+        self.on_start.clone()
     }
 
     fn on_end(&self) -> TaskEndEvent {
-        todo!()
+        self.on_end.clone()
     }
 }
