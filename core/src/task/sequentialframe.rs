@@ -1,5 +1,5 @@
 use crate::policy_match;
-use crate::task::parallel::ParallelTaskFrame;
+use crate::task::parallelframe::ParallelTaskFrame;
 use crate::task::{
     ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
     TaskFrame, TaskStartEvent,
@@ -26,7 +26,7 @@ pub enum SequentialTaskPolicy {
 }
 
 /// Represents a **sequential task frame** which wraps multiple task frames to execute at the same time
-/// in a sequential manner. This task frametype acts as a **composite node** within the task frame hierarchy,
+/// in a sequential manner. This task frame type acts as a **composite node** within the task frame hierarchy,
 /// facilitating a way to represent multiple task frames which have same timings but depend on each
 /// previous task frame finishing. The order of execution is ordered, and thus why its sequential,
 /// in the case where execution order does not matter and tasks do not require sequential execution,
@@ -44,7 +44,7 @@ pub enum SequentialTaskPolicy {
 /// use chronolog_core::schedule::TaskScheduleInterval;
 /// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
 /// use chronolog_core::task::{ExecutionTaskFrame, Task};
-/// use chronolog_core::task::sequential::SequentialTaskFrame;
+/// use chronolog_core::task::sequentialframe::SequentialTaskFrame;
 ///
 /// let primary_frame = ExecutionTaskFrame::new(
 ///     |_metadata| async {
