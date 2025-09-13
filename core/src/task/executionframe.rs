@@ -15,7 +15,7 @@ use async_trait::async_trait;
 /// ```ignore
 /// use chronolog_core::schedule::TaskScheduleInterval;
 /// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
-/// use chronolog_core::task::execution::ExecutionTaskFrame;
+/// use chronolog_core::task::executionframe::ExecutionTaskFrame;
 /// use chronolog_core::task::Task;
 ///
 /// let task_frame = ExecutionTaskFrame::new(
