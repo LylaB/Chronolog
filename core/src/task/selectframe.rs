@@ -1,0 +1,109 @@
+use std::sync::Arc;
+use async_trait::async_trait;
+use crate::errors::ChronologErrors;
+use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
+
+/// Represents a **select task frame** which wraps multiple task frames and picks one task frame based
+/// on an accessor function. This task frame type acts as a **composite node** within the task frame hierarchy, 
+/// facilitating a way to conditionally execute a task frame from a list of multiple. The results
+/// from the selected frame are returned when executed
+///
+/// # Events
+/// For events, [`SelectTaskFrame`] has only a single event, that being `on_select` which executes when
+/// a task frame is successfully selected (no index out of bounds) and before the target task frame
+/// executes
+///
+/// # Example
+/// ```ignore
+/// use std::sync::Arc;
+/// use chronolog_core::schedule::TaskScheduleInterval;
+/// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
+/// use chronolog_core::task::executionframe::ExecutionTaskFrame;
+/// use chronolog_core::task::selectframe::SelectTaskFrame;
+/// use chronolog_core::task::Task;
+///
+/// // Picks it on the first run
+/// let primary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Primary task frame fired...");
+///         Ok(())
+///     }
+/// );
+///
+/// // Picks it on the second run
+/// let secondary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Secondary task frame fired...");
+///         Ok(())
+///     }
+/// );
+///
+/// // Picks it on the third run
+/// let tertiary_frame = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Tertiary task frame fired...");
+///         Err(())
+///     }
+/// );
+///
+/// let select_frame = SelectTaskFrame::new(
+///     vec![
+///         Arc::new(primary_frame),
+///         Arc::new(secondary_frame),
+///         Arc::new(tertiary_frame)
+///     ],
+/// 
+///     // Simple example, runs always is above zero so we can safely subtract one off it
+///     |metadata| (metadata.runs() - 1) as usize % 3
+/// );
+///
+/// let task = Task::define(TaskScheduleInterval::from_secs_f64(3.21), select_frame);
+///
+/// CHRONOLOG_SCHEDULER.register(task).await;
+/// ```
+pub struct SelectTaskFrame {
+    tasks: Vec<Arc<dyn TaskFrame>>,
+    accessor: Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> usize + 'static + Send + Sync>,
+    on_start: TaskStartEvent,
+    on_end: TaskEndEvent,
+    pub on_select: ArcTaskEvent<Arc<dyn TaskFrame>>,
+}
+
+impl SelectTaskFrame {
+    pub fn new(
+        tasks: Vec<Arc<dyn TaskFrame>>, 
+        accessor: impl Fn(Arc<dyn ExposedTaskMetadata>) -> usize + 'static + Send + Sync
+    ) -> Self {
+        Self {
+            tasks,
+            accessor: Arc::new(accessor),
+            on_start: TaskEvent::new(),
+            on_end: TaskEvent::new(),
+            on_select: TaskEvent::new()
+        }
+    }
+}
+
+#[async_trait]
+impl TaskFrame for SelectTaskFrame {
+    async fn execute(
+        &self,
+        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        emitter: Arc<TaskEventEmitter>,
+    ) -> Result<(), TaskError> {
+        let idx = (self.accessor)(metadata.clone());
+        if let Some(frame) = self.tasks.get(idx) {
+            emitter.emit(metadata.clone(), self.on_select.clone(), frame.clone()).await;
+            return frame.execute(metadata, emitter).await;
+        }
+        Err(Arc::new(ChronologErrors::TaskIndexOutOfBounds(idx, self.tasks.len())))
+    }
+
+    fn on_start(&self) -> TaskStartEvent {
+        self.on_start.clone()
+    }
+
+    fn on_end(&self) -> TaskEndEvent {
+        self.on_end.clone()
+    }
+}
