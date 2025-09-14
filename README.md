@@ -24,8 +24,9 @@ as easy to use as possible while being powerful, flexible and extendable
 Since Chronolog is a fully featured scheduling library, it provides many features out of the box by default:
 
 ## 🧩 Task Composition
-Instead of thinking a task is just some executable, chronolog thinks of tasks as components in a group instead of 
-single execution blocks, allowing the expression and reuse of complex logic easily, tasks consist of:
+Instead of thinking a task is just some executable, Chronolog thinks of tasks as components in a group instead, allowing 
+the expression and reuse of complex logic easily while also seperating concerns and giving overall flexibility, tasks 
+consist of:
   - ***Task Metadata:*** The <ins>State</ins> of the task, anything data-related. Internally, this data is mutable, metadata
   can also be exposed restricting write access to any data, think of it as a global state for the entire task. In most
   cases, this is optional to provide
