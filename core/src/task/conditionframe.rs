@@ -160,7 +160,9 @@ where
     pub fn fallback_builder() -> FallbackConditionalFrameConfigBuilder<T, T2> {
         FallbackConditionalFrameConfig::builder()
     }
+}
 
+impl<T: TaskFrame + 'static + Send + Sync> ConditionalFrame<T> {
     pub fn builder() -> NonFallbackConditionalFrameConfigBuilder<T> {
         NonFallbackConditionalFrameConfig::builder()
     }
@@ -219,4 +221,3 @@ impl<T: TaskFrame, F: TaskFrame> TaskFrame for ConditionalFrame<T, F> {
 
     define_events!();
 }
-
