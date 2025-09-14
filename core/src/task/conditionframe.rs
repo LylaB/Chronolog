@@ -1,8 +1,11 @@
-use std::sync::Arc;
-use async_trait::async_trait;
-use typed_builder::TypedBuilder;
 use crate::errors::ChronologErrors;
-use crate::task::{ArcTaskEvent, ExposedTaskMetadata, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
+use crate::task::{
+    ArcTaskEvent, ExposedTaskMetadata, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent,
+    TaskEventEmitter, TaskFrame, TaskStartEvent,
+};
+use async_trait::async_trait;
+use std::sync::Arc;
+use typed_builder::TypedBuilder;
 
 /*
     Sadly, I am forced to specify and handle 2 mostly identical
@@ -18,7 +21,7 @@ use crate::task::{ArcTaskEvent, ExposedTaskMetadata, FallbackTaskFrame, TaskEndE
 pub struct FallbackConditionalFrameConfig<T, T2>
 where
     T: TaskFrame + 'static + Send + Sync,
-    T2: TaskFrame + 'static + Send + Sync
+    T2: TaskFrame + 'static + Send + Sync,
 {
     #[builder(setter(transform = |s: T2| Arc::new(s)))]
     fallback: Arc<T2>,
@@ -54,7 +57,7 @@ pub struct NonFallbackConditionalFrameConfig<T: TaskFrame + Send + Sync + 'stati
 impl<T, T2> From<FallbackConditionalFrameConfig<T, T2>> for ConditionalFrame<T, T2>
 where
     T: TaskFrame + 'static + Send + Sync,
-    T2: TaskFrame + 'static + Send + Sync
+    T2: TaskFrame + 'static + Send + Sync,
 {
     fn from(config: FallbackConditionalFrameConfig<T, T2>) -> Self {
         ConditionalFrame {
@@ -70,7 +73,9 @@ where
     }
 }
 
-impl<T: TaskFrame + 'static + Send + Sync> From<NonFallbackConditionalFrameConfig<T>> for ConditionalFrame<T> {
+impl<T: TaskFrame + 'static + Send + Sync> From<NonFallbackConditionalFrameConfig<T>>
+    for ConditionalFrame<T>
+{
     fn from(config: NonFallbackConditionalFrameConfig<T>) -> Self {
         ConditionalFrame {
             task: config.task,
@@ -84,7 +89,6 @@ impl<T: TaskFrame + 'static + Send + Sync> From<NonFallbackConditionalFrameConfi
         }
     }
 }
-
 
 /// Represents a **conditional task frame** which wraps a task frame and executes it depending on a
 /// predicate function. This task frame type acts as a **wrapper node** within the task frame hierarchy,
@@ -151,11 +155,10 @@ pub struct ConditionalFrame<T: 'static, T2: 'static = ()> {
     pub on_false: ArcTaskEvent<Arc<T2>>,
 }
 
-
 impl<T, T2> ConditionalFrame<T, T2>
 where
     T: TaskFrame + 'static + Send + Sync,
-    T2: TaskFrame + 'static + Send + Sync
+    T2: TaskFrame + 'static + Send + Sync,
 {
     pub fn fallback_builder() -> FallbackConditionalFrameConfigBuilder<T, T2> {
         FallbackConditionalFrameConfig::builder()
@@ -171,10 +174,18 @@ impl<T: TaskFrame + 'static + Send + Sync> ConditionalFrame<T> {
 macro_rules! execute_func_impl {
     ($self: expr, $emitter: expr, $metadata: expr) => {
         if ($self.predicate)($metadata.clone()) {
-            $emitter.emit($metadata.clone(), $self.on_true.clone(), $self.task.clone()).await;
+            $emitter
+                .emit($metadata.clone(), $self.on_true.clone(), $self.task.clone())
+                .await;
             return $self.task.execute($metadata.clone(), $emitter).await;
         }
-        $emitter.emit($metadata.clone(), $self.on_false.clone(), $self.fallback.clone()).await;
+        $emitter
+            .emit(
+                $metadata.clone(),
+                $self.on_false.clone(),
+                $self.fallback.clone(),
+            )
+            .await;
     };
 }
 
@@ -198,7 +209,11 @@ impl<T: TaskFrame> TaskFrame for ConditionalFrame<T> {
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         execute_func_impl!(self, emitter, metadata);
-        if self.error_on_false {Err(Arc::new(ChronologErrors::TaskConditionFail))} else {Ok(())}
+        if self.error_on_false {
+            Err(Arc::new(ChronologErrors::TaskConditionFail))
+        } else {
+            Ok(())
+        }
     }
 
     define_events!();
