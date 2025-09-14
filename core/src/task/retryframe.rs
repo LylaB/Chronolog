@@ -142,11 +142,7 @@ impl<T: TaskFrame + 'static> RetriableTaskFrame<T> {
 
     /// Creates a retriable task that has no delay per retry
     pub fn new_instant(task: T, retries: NonZeroU32) -> Self {
-        RetriableTaskFrame::<T, ConstantBackoffStrategy>::new(
-            task,
-            retries,
-            Duration::ZERO
-        )
+        RetriableTaskFrame::<T, ConstantBackoffStrategy>::new(task, retries, Duration::ZERO)
     }
 }
 
