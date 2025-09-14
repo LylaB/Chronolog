@@ -46,9 +46,14 @@ single execution blocks, allowing the expression and reuse of complex logic easi
   error, examples include rollbacks, cleanups, state reset management, and so on. While the default error handler used is
   for silently ignoring them, in production environments it is advised to make your own error handler
   <br /> <br />
-  - **Task Tags** Suggests the type of task, the computational resources... etc. These are suggestions for the scheduler,
-  they can be used to process critical tasks first, optimize the workflow, execute the task in a specific environment, 
-  and so on. You can add your own tags if you wish, by default tasks contain no tags
+  - **Task Extension** Acts as an extension point for defining more complex task types, by default it is not required,
+   however, in the future distributed crate, this will be used for defining other fields which do not fit in the core
+  crate (single-node use)
+  <br /> <br />
+  - **Task Priority** Defines the importance of a task. Chronolog offers 5 levels of priority which are
+  ``LOW``, ``MEDIUM``, ``HIGH``, ``IMPORTANT``, ``CRITICAL``. These priority levels make Chronolog responsive even under
+  heavy workflow, as it optimizes the execution of tasks, as low priority tasks may execute a bit later, whereas critical
+  tasks in most scenarios will immediately execute
   <br /> <br />
   - **Task Dependencies** While for task frames, you can use ``ParallelTaskFrame`` and ``SequentialTaskFrame`` together,
   there may be cases where you want Task C to wait for Task A and Task B to finish before scheduling it for execution.
@@ -66,9 +71,13 @@ defined by the default scheduler, here are the composites a scheduler requires:
 - **Clock** This is a mechanism for tracking time, while by default it uses the system clock, one can also use a virtual
 clock for simulating scenarios, such as unit testing, benchmarking or stress-testing
 <br /> <br />
-- **Scheduler Engine** The actual core that drives the Scheduler, it handles one or multiple **Schedule Workers** which
-execute the actual tasks, the scheduler engine acts as the brain that schedules the tasks and allocates the tasks to a
-scheduler worker based on a couple of policies
+- **Scheduler Engine** The actual core that drives the Scheduler, it handles one or multiple **Schedule Workers**. The 
+scheduler engine acts as the brain that schedules the tasks and allocates the tasks to a scheduler worker based on a couple 
+of policies. The algorithm works by ranking each worker with a score based on the set of tags this task contains, once
+it scans all workers, then it chooses the one with the maximum score
+<br /> <br />
+- **Schedule Workers** These are workers which execute tasks given to them, they are separate threads, and they communicate
+  with the Scheduler Engine. These workers can define tags to illustrate what they support
 <br /> <br />
 - **Schedule Worker Policies** These are specific policies for how to allocate a task to a scheduler worker, policies
 can be stacked with one and another for better task allocation on schedule workers. Policies can also be defined by the
