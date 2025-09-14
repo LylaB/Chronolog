@@ -1,20 +1,20 @@
+pub mod conditionframe;
 pub mod executionframe;
 pub mod fallbackframe;
 pub mod parallelframe;
 pub mod retryframe;
+pub mod selectframe;
 pub mod sequentialframe;
 pub mod timeoutframe;
-pub mod selectframe;
-pub mod conditionframe;
 
+pub use conditionframe::ConditionalFrame;
 pub use executionframe::ExecutionTaskFrame;
 pub use fallbackframe::FallbackTaskFrame;
 pub use parallelframe::ParallelTaskFrame;
 pub use retryframe::RetriableTaskFrame;
+pub use selectframe::SelectTaskFrame;
 pub use sequentialframe::SequentialTaskFrame;
 pub use timeoutframe::TimeoutTaskFrame;
-pub use selectframe::SelectTaskFrame;
-pub use conditionframe::ConditionalFrame;
 
 use crate::schedule::{TaskSchedule};
 use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
