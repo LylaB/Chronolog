@@ -16,7 +16,7 @@ pub use timeoutframe::TimeoutTaskFrame;
 pub use selectframe::SelectTaskFrame;
 pub use conditionframe::ConditionalFrame;
 
-use crate::schedule::TaskSchedule;
+use crate::schedule::{TaskSchedule};
 use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -25,18 +25,65 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
-use std::num::NonZeroU64;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
+use crate::task::retryframe::RetryBackoffStrategy;
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
 pub type TaskEndEvent = ArcTaskEvent<Option<TaskError>>;
 pub type ArcTaskEvent<P> = Arc<TaskEvent<P>>;
 pub type TaskError = Arc<dyn Debug + Send + Sync>;
+
+/*
+    Quite a similar situation to ConditionalTaskFrame, tho this time I can save one builder and a
+    from trait implementation, reducing the code and making it more maintainable
+*/
+
+#[derive(TypedBuilder)]
+#[builder(build_method(into = Task<E>))]
+pub struct TaskConfig<E: TaskExtension> {
+    extension: E,
+
+    #[builder(default = Arc::new(DefaultTaskMetadata::new()))]
+    metadata: Arc<dyn TaskMetadata>,
+
+    #[builder(setter(transform = |s: impl TaskFrame + 'static| Arc::new(s) as Arc<dyn TaskFrame>))]
+    frame: Arc<dyn TaskFrame>,
+
+    #[builder(setter(transform = |s: impl TaskSchedule + 'static| Arc::new(s) as Arc<dyn TaskSchedule>))]
+    schedule: Arc<dyn TaskSchedule>,
+
+    #[builder(
+        default = Arc::new(SilentTaskErrorHandler),
+        setter(transform = |s: impl TaskErrorHandler + 'static| Arc::new(s) as Arc<dyn TaskErrorHandler>)
+    )]
+    error_handler: Arc<dyn TaskErrorHandler>,
+
+    #[builder(
+        default = Arc::new(SequentialSchedulingPolicy),
+        setter(transform = |s: impl ScheduleStrategy + 'static| Arc::new(s) as Arc<dyn ScheduleStrategy>)
+    )]
+    overlap_policy: Arc<dyn ScheduleStrategy>,
+}
+
+impl<E: TaskExtension> From<TaskConfig<E>> for Task<E> {
+    fn from(config: TaskConfig<E>) -> Self {
+        Task {
+            metadata: config.metadata,
+            frame: config.frame,
+            schedule: config.schedule,
+            error_handler: config.error_handler,
+            overlap_policy: config.overlap_policy,
+            extension: Arc::new(config.extension)
+        }
+    }
+}
 
 /// [`Task`] is one of the core components of Chronolog, it is a composite, and made of several parts,
 /// giving it massive flexibility in terms of customization.
@@ -84,29 +131,21 @@ pub type TaskError = Arc<dyn Debug + Send + Sync>;
 /// - [`TaskSchedule`]
 /// - [`ScheduleStrategy`]
 /// - [`TaskErrorHandler`]
-#[derive(TypedBuilder)]
-pub struct Task {
-    #[builder(default = Arc::new(DefaultTaskMetadata::new()))]
+pub struct Task<E: TaskExtension = ()> {
     pub(crate) metadata: Arc<dyn TaskMetadata>,
-
-    #[builder(setter(transform = |s: impl TaskFrame + 'static| Arc::new(s) as Arc<dyn TaskFrame>))]
     pub(crate) frame: Arc<dyn TaskFrame>,
-
-    #[builder(setter(transform = |s: impl TaskSchedule + 'static| Arc::new(s) as Arc<dyn TaskSchedule>))]
     pub(crate) schedule: Arc<dyn TaskSchedule>,
-
-    #[builder(
-        default = Arc::new(SilentTaskErrorHandler),
-        setter(transform = |s: impl TaskErrorHandler + 'static| Arc::new(s) as Arc<dyn TaskErrorHandler>)
-    )]
     pub(crate) error_handler: Arc<dyn TaskErrorHandler>,
-
-    #[builder(
-        default = Arc::new(SequentialSchedulingPolicy),
-        setter(transform = |s: impl ScheduleStrategy + 'static| Arc::new(s) as Arc<dyn ScheduleStrategy>)
-    )]
     pub(crate) overlap_policy: Arc<dyn ScheduleStrategy>,
+    pub(crate) extension: Arc<E>
 }
+
+/// [`TaskExtension`] is a blanket trait, providing a way to add on more composite types to the
+/// task, without having to deal with metadata management while getting guaranteed type safety.
+/// By default, a [`Task`] does not require a task extension, as such this is mostly for third
+/// party integrations
+pub trait TaskExtension: Send + Sync {}
+impl TaskExtension for () {}
 
 impl Task {
     /// Creates a simple task from a schedule and an interval. Mostly used as a convenient method
@@ -118,9 +157,32 @@ impl Task {
             schedule: Arc::new(schedule),
             error_handler: Arc::new(SilentTaskErrorHandler),
             overlap_policy: Arc::new(SequentialSchedulingPolicy),
+            extension: Arc::new(()),
         }
     }
+    
+    /// Creates a task builder without an extension point required, this is mostly a
+    /// convenience method and is identical to:
+    /// ```rust
+    /// # use chronolog_core::task::Task;
+    /// 
+    /// Task::extend_builder()
+    ///     .extension(())
+    /// ```
+    pub fn builder() -> TaskConfigBuilder<(), (((),), (), (), (), (), ())> {
+        TaskConfig::builder()
+            .extension(())
+    }
+}
 
+impl<E: TaskExtension> Task<E> {
+    /// Creates a task builder with a required extension point of type `E` [`TaskExtension`]
+    pub fn extend_builder() -> TaskConfigBuilder<E> {
+        TaskConfig::builder()
+    }
+}
+
+impl<E: TaskExtension> Task<E> {
     /// Gets the exposed metadata (immutable) for outside parties
     pub fn metadata(&self) -> Arc<dyn ExposedTaskMetadata> {
         self.metadata.as_exposed().clone()
@@ -144,6 +206,11 @@ impl Task {
     /// Gets the overlapping policy for outside parties
     pub fn overlap_policy(&self) -> Arc<dyn ScheduleStrategy> {
         self.overlap_policy.clone()
+    }
+    
+    /// Gets the extension trait attached to the task
+    pub fn extension(&self) -> Arc<E> {
+        self.extension.clone()
     }
 }
 
@@ -410,6 +477,106 @@ pub trait TaskFrame: Send + Sync {
 
     fn on_start(&self) -> TaskStartEvent;
     fn on_end(&self) -> TaskEndEvent;
+}
+
+/// [`TaskFrameBuilder`] acts more as a utility rather than a full feature, it allows to construct
+/// the default implemented task frames with a more builder syntax
+///
+/// # Example
+/// ```ignore
+/// use std::num::NonZeroU32;
+/// use std::time::Duration;
+/// use chronolog_core::task::{ExecutionTaskFrame, TaskFrameBuilder};
+///
+/// let simple_frame = ExecutionTaskFrame::new(|_| async {Ok(())});
+///
+/// let frame = TaskFrameBuilder::new(simple_frame)
+///     .with_timeout(Duration::from_secs_f64(2.32))
+///     .with_retry(NonZeroU32::new(15).unwrap(), Duration::from_secs_f64(1.0))
+///     .with_condition(|metadata| {
+///         metadata.runs() % 2 == 0
+///     })
+///     .build();
+///
+/// // While the builder approach alleviates the more cumbersome
+/// // writing of the common approach, it doesn't allow custom
+/// // task frames implemented from third parties (you can
+/// // mitigate this with the newtype pattern)
+/// ```
+pub struct TaskFrameBuilder<T: TaskFrame>(T);
+
+impl<T: TaskFrame> TaskFrameBuilder<T> {
+    pub fn new(frame: T) -> Self {
+        Self(frame)
+    }
+
+    pub fn with_instant_retry(
+        self,
+        retries: NonZeroU32
+    ) -> TaskFrameBuilder<RetriableTaskFrame<T>> {
+        TaskFrameBuilder(RetriableTaskFrame::new_instant(self.0, retries))
+    }
+
+    pub fn with_retry(
+        self,
+        retries: NonZeroU32,
+        delay: Duration
+    ) -> TaskFrameBuilder<RetriableTaskFrame<T>> {
+        TaskFrameBuilder(RetriableTaskFrame::new(self.0, retries, delay))
+    }
+
+    pub fn with_backoff_retry<T2: RetryBackoffStrategy>(
+        self,
+        retries: NonZeroU32,
+        strat: T2
+    ) -> TaskFrameBuilder<RetriableTaskFrame<T, T2>>
+    where RetriableTaskFrame<T, T2>: TaskFrame{
+        TaskFrameBuilder(RetriableTaskFrame::<T, T2>::new_with(self.0, retries, strat))
+    }
+
+    pub fn with_timeout(
+        self,
+        max_duration: Duration
+    ) -> TaskFrameBuilder<TimeoutTaskFrame<T>> {
+        TaskFrameBuilder(TimeoutTaskFrame::new(self.0, max_duration))
+    }
+
+    pub fn with_fallback<T2: TaskFrame + 'static>(
+        self,
+        fallback: T2
+    ) -> TaskFrameBuilder<FallbackTaskFrame<T, T2>> {
+        TaskFrameBuilder(FallbackTaskFrame::new(self.0, fallback))
+    }
+
+    pub fn with_condition(
+        self,
+        predicate: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync
+    ) -> TaskFrameBuilder<ConditionalFrame<T>> {
+        let condition: ConditionalFrame<T> = ConditionalFrame::<T>::builder()
+            .predicate(predicate)
+            .task(self.0)
+            .error_on_false(false)
+            .build();
+        TaskFrameBuilder(condition)
+    }
+
+    pub fn with_fallback_condition<T2: TaskFrame + 'static>(
+        self,
+        fallback: T2,
+        predicate: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync
+    ) -> TaskFrameBuilder<ConditionalFrame<T, T2>> {
+        let condition: ConditionalFrame<T, T2> = ConditionalFrame::<T, T2>::fallback_builder()
+            .predicate(predicate)
+            .task(self.0)
+            .fallback(fallback)
+            .error_on_false(false)
+            .build();
+        TaskFrameBuilder(condition)
+    }
+
+    pub fn build(self) -> T {
+        self.0
+    }
 }
 
 /// An error context object, it cannot be created by outside parties and is handed by the
