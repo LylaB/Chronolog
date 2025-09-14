@@ -16,8 +16,9 @@ pub use selectframe::SelectTaskFrame;
 pub use sequentialframe::SequentialTaskFrame;
 pub use timeoutframe::TimeoutTaskFrame;
 
-use crate::schedule::{TaskSchedule};
+use crate::schedule::TaskSchedule;
 use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
+use crate::task::retryframe::RetryBackoffStrategy;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
@@ -33,7 +34,6 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
-use crate::task::retryframe::RetryBackoffStrategy;
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
 pub type TaskEndEvent = ArcTaskEvent<Option<TaskError>>;
@@ -80,7 +80,7 @@ impl<E: TaskExtension> From<TaskConfig<E>> for Task<E> {
             schedule: config.schedule,
             error_handler: config.error_handler,
             overlap_policy: config.overlap_policy,
-            extension: Arc::new(config.extension)
+            extension: Arc::new(config.extension),
         }
     }
 }
@@ -137,7 +137,7 @@ pub struct Task<E: TaskExtension = ()> {
     pub(crate) schedule: Arc<dyn TaskSchedule>,
     pub(crate) error_handler: Arc<dyn TaskErrorHandler>,
     pub(crate) overlap_policy: Arc<dyn ScheduleStrategy>,
-    pub(crate) extension: Arc<E>
+    pub(crate) extension: Arc<E>,
 }
 
 /// [`TaskExtension`] is a blanket trait, providing a way to add on more composite types to the
@@ -160,18 +160,17 @@ impl Task {
             extension: Arc::new(()),
         }
     }
-    
+
     /// Creates a task builder without an extension point required, this is mostly a
     /// convenience method and is identical to:
     /// ```rust
     /// # use chronolog_core::task::Task;
-    /// 
+    ///
     /// Task::extend_builder()
     ///     .extension(())
     /// ```
     pub fn builder() -> TaskConfigBuilder<(), (((),), (), (), (), (), ())> {
-        TaskConfig::builder()
-            .extension(())
+        TaskConfig::builder().extension(())
     }
 }
 
@@ -207,7 +206,7 @@ impl<E: TaskExtension> Task<E> {
     pub fn overlap_policy(&self) -> Arc<dyn ScheduleStrategy> {
         self.overlap_policy.clone()
     }
-    
+
     /// Gets the extension trait attached to the task
     pub fn extension(&self) -> Arc<E> {
         self.extension.clone()
@@ -512,7 +511,7 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
 
     pub fn with_instant_retry(
         self,
-        retries: NonZeroU32
+        retries: NonZeroU32,
     ) -> TaskFrameBuilder<RetriableTaskFrame<T>> {
         TaskFrameBuilder(RetriableTaskFrame::new_instant(self.0, retries))
     }
@@ -520,7 +519,7 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
     pub fn with_retry(
         self,
         retries: NonZeroU32,
-        delay: Duration
+        delay: Duration,
     ) -> TaskFrameBuilder<RetriableTaskFrame<T>> {
         TaskFrameBuilder(RetriableTaskFrame::new(self.0, retries, delay))
     }
@@ -528,29 +527,30 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
     pub fn with_backoff_retry<T2: RetryBackoffStrategy>(
         self,
         retries: NonZeroU32,
-        strat: T2
+        strat: T2,
     ) -> TaskFrameBuilder<RetriableTaskFrame<T, T2>>
-    where RetriableTaskFrame<T, T2>: TaskFrame{
-        TaskFrameBuilder(RetriableTaskFrame::<T, T2>::new_with(self.0, retries, strat))
+    where
+        RetriableTaskFrame<T, T2>: TaskFrame,
+    {
+        TaskFrameBuilder(RetriableTaskFrame::<T, T2>::new_with(
+            self.0, retries, strat,
+        ))
     }
 
-    pub fn with_timeout(
-        self,
-        max_duration: Duration
-    ) -> TaskFrameBuilder<TimeoutTaskFrame<T>> {
+    pub fn with_timeout(self, max_duration: Duration) -> TaskFrameBuilder<TimeoutTaskFrame<T>> {
         TaskFrameBuilder(TimeoutTaskFrame::new(self.0, max_duration))
     }
 
     pub fn with_fallback<T2: TaskFrame + 'static>(
         self,
-        fallback: T2
+        fallback: T2,
     ) -> TaskFrameBuilder<FallbackTaskFrame<T, T2>> {
         TaskFrameBuilder(FallbackTaskFrame::new(self.0, fallback))
     }
 
     pub fn with_condition(
         self,
-        predicate: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync
+        predicate: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync,
     ) -> TaskFrameBuilder<ConditionalFrame<T>> {
         let condition: ConditionalFrame<T> = ConditionalFrame::<T>::builder()
             .predicate(predicate)
@@ -563,7 +563,7 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
     pub fn with_fallback_condition<T2: TaskFrame + 'static>(
         self,
         fallback: T2,
-        predicate: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync
+        predicate: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync,
     ) -> TaskFrameBuilder<ConditionalFrame<T, T2>> {
         let condition: ConditionalFrame<T, T2> = ConditionalFrame::<T, T2>::fallback_builder()
             .predicate(predicate)
