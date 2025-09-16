@@ -15,6 +15,22 @@ use typed_builder::TypedBuilder;
     Honestly, it's quite the code smell
 */
 
+#[async_trait]
+pub trait FramePredicateFunc: Send + Sync {
+    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> bool;
+}
+
+#[async_trait]
+impl<F, Fut> FramePredicateFunc for F
+where
+    F: Fn(Arc<dyn ExposedTaskMetadata>) -> Fut + Send + Sync,
+    Fut: Future<Output = bool> + Send,
+{
+    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> bool {
+        self(metadata).await
+    }
+}
+
 //noinspection DuplicatedCode
 #[derive(TypedBuilder)]
 #[builder(build_method(into = ConditionalFrame<T, T2>))]
@@ -29,10 +45,10 @@ where
     #[builder(setter(transform = |s: T| Arc::new(s)))]
     task: Arc<T>,
 
-    #[builder(setter(transform = |s: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync| {
-        Arc::new(s) as Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync>
+    #[builder(setter(transform = |s: impl FramePredicateFunc + 'static| {
+        Arc::new(s) as Arc<dyn FramePredicateFunc>
     }))]
-    predicate: Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync>,
+    predicate: Arc<dyn FramePredicateFunc>,
 
     #[builder(default = false)]
     error_on_false: bool,
@@ -45,10 +61,10 @@ pub struct NonFallbackConditionalFrameConfig<T: TaskFrame + Send + Sync + 'stati
     #[builder(setter(transform = |s: T| Arc::new(s)))]
     task: Arc<T>,
 
-    #[builder(setter(transform = |s: impl Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync| {
-        Arc::new(s) as Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync>
+    #[builder(setter(transform = |s: impl FramePredicateFunc + 'static| {
+        Arc::new(s) as Arc<dyn FramePredicateFunc>
     }))]
-    predicate: Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync>,
+    predicate: Arc<dyn FramePredicateFunc>,
 
     #[builder(default = false)]
     error_on_false: bool,
@@ -147,7 +163,7 @@ impl<T: TaskFrame + 'static + Send + Sync> From<NonFallbackConditionalFrameConfi
 pub struct ConditionalFrame<T: 'static, T2: 'static = ()> {
     task: Arc<T>,
     fallback: Arc<T2>,
-    predicate: Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> bool + 'static + Send + Sync>,
+    predicate: Arc<dyn FramePredicateFunc>,
     on_start: TaskStartEvent,
     on_end: TaskEndEvent,
     error_on_false: bool,
@@ -173,7 +189,8 @@ impl<T: TaskFrame + 'static + Send + Sync> ConditionalFrame<T> {
 
 macro_rules! execute_func_impl {
     ($self: expr, $emitter: expr, $metadata: expr) => {
-        if ($self.predicate)($metadata.clone()) {
+        let result = $self.predicate.execute($metadata.clone()).await;
+        if result {
             $emitter
                 .emit($metadata.clone(), $self.on_true.clone(), $self.task.clone())
                 .await;
