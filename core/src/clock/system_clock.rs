@@ -1,6 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 use async_trait::async_trait;
-use crate::clock::{SchedulerClock, VirtualClock};
+use crate::clock::SchedulerClock;
+
+#[allow(unused_imports)]
+use crate::clock::VirtualClock;
 
 /// [`SystemClock`] is an implementation of [`SchedulerClock`] trait, it is the default option
 /// for scheduling, unlike [`VirtualClock`], it moves forward no matter what and cannot be advanced
@@ -18,6 +21,17 @@ impl SchedulerClock for SystemClock {
     }
 
     async fn idle_to(&self, to: SystemTime) {
-        tokio::time::sleep(to.duration_since(UNIX_EPOCH).unwrap()).await;
+        let now = SystemTime::now();
+        let duration = match to.duration_since(now) {
+            Ok(duration) => duration,
+            Err(diff) => {
+                if diff.duration() <= Duration::from_millis(7) {
+                    return;
+                }
+                panic!("Supposed future time is now in the past with a difference of {:?}", diff.duration());
+            }
+        };
+
+        tokio::time::sleep(duration).await;
     }
 }
