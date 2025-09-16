@@ -65,10 +65,6 @@ impl SchedulerClock for VirtualClock {
         UNIX_EPOCH + Duration::from_millis(now)
     }
 
-    async fn idle(&self, duration: Duration) {
-        self.idle_to(self.now().await + duration).await;
-    }
-
     async fn idle_to(&self, to: SystemTime) {
         while self.now().await < to {
             self.notify.notified().await;
