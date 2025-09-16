@@ -15,9 +15,11 @@ use std::time::Duration;
 ///
 /// Some example implementations are:
 /// - [`ConstantDelayStrategy`] Wraps a duration and gives the same duration
-/// - [`
+/// - [`ExponentialBackoffStrategy`] For exponential backoff based on a factor
+/// - [`JitterBackoffStrategy`] For randomly-based jitter from a backoff strategy
+#[async_trait]
 pub trait RetryBackoffStrategy: Debug + Send + Sync + 'static {
-    fn compute(&self, retry: u32) -> Duration;
+    async fn compute(&self, retry: u32) -> Duration;
 }
 
 /// [`ConstantBackoffStrategy`] is an implementation of the [`RetryBackoffStrategy`],
@@ -31,8 +33,9 @@ impl ConstantBackoffStrategy {
     }
 }
 
+#[async_trait]
 impl RetryBackoffStrategy for ConstantBackoffStrategy {
-    fn compute(&self, _retry: u32) -> Duration {
+    async fn compute(&self, _retry: u32) -> Duration {
         self.0
     }
 }
@@ -53,8 +56,9 @@ impl ExponentialBackoffStrategy {
     }
 }
 
+#[async_trait]
 impl RetryBackoffStrategy for ExponentialBackoffStrategy {
-    fn compute(&self, retry: u32) -> Duration {
+    async fn compute(&self, retry: u32) -> Duration {
         Duration::from_secs_f64(self.0.powf(retry as f64).min(self.1))
     }
 }
@@ -70,9 +74,10 @@ impl<T: RetryBackoffStrategy> JitterBackoffStrategy<T> {
     }
 }
 
+#[async_trait]
 impl<T: RetryBackoffStrategy> RetryBackoffStrategy for JitterBackoffStrategy<T> {
-    fn compute(&self, retry: u32) -> Duration {
-        let max_jitter = self.0.compute(retry).mul_f64(self.1);
+    async fn compute(&self, retry: u32) -> Duration {
+        let max_jitter = self.0.compute(retry).await.mul_f64(self.1);
         Duration::from_secs_f64(rand::random::<f64>() * max_jitter.as_secs_f64())
     }
 }
@@ -202,7 +207,7 @@ impl<T: TaskFrame + 'static, T2: RetryBackoffStrategy> TaskFrame for RetriableTa
                         .await;
                 }
             }
-            let delay = self.backoff_strat.compute(retry);
+            let delay = self.backoff_strat.compute(retry).await;
             tokio::time::sleep(delay).await;
         }
         Err(error.unwrap())
