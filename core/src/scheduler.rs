@@ -87,10 +87,11 @@ impl Scheduler {
             let double_notifier_clone = notifier.clone();
             tokio::spawn(async move {
                 while let Ok((task, idx)) = scheduler_receive.lock().await.recv().await {
-                     if let Some(max_runs) = task.metadata.max_runs()
-                        && task.metadata.runs().load(Ordering::Relaxed) >= max_runs.get() {
-                         continue;
-                     }
+                    if let Some(max_runs) = task.metadata.max_runs()
+                        && task.metadata.runs().load(Ordering::Relaxed) >= max_runs.get()
+                    {
+                        continue;
+                    }
                     double_store_clone
                         .reschedule(double_clock_clone.clone(), task, idx)
                         .await;
