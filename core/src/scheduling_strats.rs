@@ -1,11 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use arc_swap::ArcSwapOption;
-use chrono::{DateTime, Local};
-use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
-use crate::task::{Task, TaskErrorContext, TaskEventEmitter};
+use crate::task::{Task, TaskEventEmitter};
 
 /// [`ScheduleStrategy`] defines how the task behaves when being overlapped by the same instance
 /// task or by others. Strategies receive a task, an event emitter and return a local timestamp
@@ -14,25 +11,7 @@ use crate::task::{Task, TaskErrorContext, TaskEventEmitter};
 /// automatically in [`<dyn ScheduleStrategy>::execute_logic`] for convenience’s sake
 #[async_trait::async_trait]
 pub trait ScheduleStrategy: Send + Sync {
-    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) -> DateTime<Local>;
-}
-
-impl dyn ScheduleStrategy {
-    async fn execute_logic(emitter: Arc<TaskEventEmitter>, task: Arc<Task>) {
-        task.metadata.runs().fetch_add(1, Ordering::Relaxed);
-        emitter.emit(task.metadata (), task.frame().on_start(), ()).await;
-        let result = task.frame().execute(task.metadata.as_exposed(), emitter.clone()).await;
-        let err = result.err();
-        emitter.emit(task.metadata (), task.frame().on_end(), err.clone()).await;
-        if let Some(error) = err {
-            let error_ctx = TaskErrorContext {
-                error,
-                metadata: task.metadata.as_exposed().clone()
-            };
-
-            task.error_handler().on_error(error_ctx).await;
-        }
-    }
+    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>);
 }
 
 /// [`SequentialSchedulingPolicy`] is an implementation of [`ScheduleStrategy`] and executes the
@@ -41,9 +20,8 @@ impl dyn ScheduleStrategy {
 pub struct SequentialSchedulingPolicy;
 #[async_trait::async_trait]
 impl ScheduleStrategy for SequentialSchedulingPolicy {
-    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) -> DateTime<Local> {
-        <dyn ScheduleStrategy>::execute_logic(emitter, task).await;
-        Local::now()
+    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
+        task.run(emitter).await.ok();
     }
 }
 
@@ -53,11 +31,10 @@ impl ScheduleStrategy for SequentialSchedulingPolicy {
 pub struct ConcurrentSchedulingPolicy;
 #[async_trait::async_trait]
 impl ScheduleStrategy for ConcurrentSchedulingPolicy {
-    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) -> DateTime<Local> {
+    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
         tokio::spawn(async move {
-            <dyn ScheduleStrategy>::execute_logic(emitter, task).await;
+            task.run(emitter).await.ok();
         });
-        Local::now()
     }
 }
 
@@ -68,80 +45,28 @@ impl ScheduleStrategy for ConcurrentSchedulingPolicy {
 /// **⚠ Note ⚠** due to a limitation, if the task frame executes CPU-Bound logic mostly and does not yield,
 /// then the task frame may be completed, as such ensure the task frame has defined a sufficient
 /// number of cancellation points / yields
-pub struct CancelPreviousSchedulingPolicy {
-    process: ArcSwapOption<JoinHandle<()>>,
-    cancel_tx: Mutex<Option<watch::Sender<()>>>,
-}
+pub struct CancelPreviousSchedulingPolicy(ArcSwapOption<JoinHandle<()>>);
 
 impl CancelPreviousSchedulingPolicy {
     pub fn new() -> Self {
-        Self {
-            process: ArcSwapOption::new(None),
-            cancel_tx: Mutex::new(None),
-        }
+        Self(ArcSwapOption::new(None))
     }
 }
 
 #[async_trait::async_trait]
 impl ScheduleStrategy for CancelPreviousSchedulingPolicy {
-    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) -> DateTime<Local> {
-        emitter.emit(task.metadata (), task.frame().on_start(), ()).await;
-        let old_handle = self.process.swap(None);
-        let mut cancel_lock = self.cancel_tx.lock().await;
-        let old_cancel_tx = cancel_lock.take();
-        drop(cancel_lock);
+    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
+        let old_handle = self.0.swap(None);
 
-        if let (Some(handle), Some(cancel_tx)) = (old_handle, old_cancel_tx) {
-            let _ = cancel_tx.send(());
+        if let Some(handle) = old_handle {
             handle.abort();
         }
 
-        let (cancel_tx, mut cancel_rx) = watch::channel(());
-
         let handle = tokio::spawn(async move {
-            if cancel_rx.has_changed().unwrap() {
-                return;
-            }
-
-            let cancel_rx_clone = cancel_rx.clone();
-
-            tokio::select! {
-                _ = async {
-                    emitter.emit(task.metadata (), task.frame().on_start(), ()).await;
-
-                    let mut interval = tokio::time::interval(Duration::from_millis(100));
-                    let frame = task.frame();
-
-                    tokio::select! {
-                            _ = interval.tick() => {
-                                if cancel_rx_clone.has_changed().unwrap() {
-                                    return;
-                                }
-                            }
-
-                            result = frame.execute(task.metadata.as_exposed(), emitter.clone()) => {
-                                let err = result.err();
-                                emitter.emit(task.metadata (), task.frame().on_end(), err.clone()).await;
-                                if let Some(error) = err {
-                                    let error_ctx = TaskErrorContext {
-                                        error,
-                                        metadata: task.metadata.as_exposed().clone()
-                                    };
-
-                                    task.error_handler().on_error(error_ctx).await;
-                                }
-                            }
-                        }
-                } => {}
-
-                _ = cancel_rx.changed() => {}
-            }
+            task.run(emitter).await.ok();
         });
 
-        self.process.store(Some(Arc::new(handle)));
-        let mut cancel_lock = self.cancel_tx.lock().await;
-        *cancel_lock = Some(cancel_tx);
-        Local::now()
+        self.0.store(Some(Arc::new(handle)));
     }
 }
 
@@ -158,17 +83,16 @@ impl CancelCurrentSchedulingPolicy {
 
 #[async_trait::async_trait]
 impl ScheduleStrategy for CancelCurrentSchedulingPolicy {
-    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) -> DateTime<Local> {
+    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
         let is_free = &self.0;
         if !is_free.load(Ordering::Relaxed) {
-            return Local::now();
+            return;
         }
         is_free.store(false, Ordering::Relaxed);
         let is_free_clone = is_free.clone();
         tokio::spawn(async move {
-            <dyn ScheduleStrategy>::execute_logic(emitter, task).await;
+            task.run(emitter).await.ok();
             is_free_clone.store(true, Ordering::Relaxed);
         });
-        Local::now()
     }
 }
