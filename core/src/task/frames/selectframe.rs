@@ -3,6 +3,22 @@ use async_trait::async_trait;
 use crate::errors::ChronologErrors;
 use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
 
+#[async_trait]
+pub trait FrameAccessorFunc: Send + Sync {
+    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> usize;
+}
+
+#[async_trait]
+impl<F, Fut> FrameAccessorFunc for F
+where
+    F: Fn(Arc<dyn ExposedTaskMetadata>) -> Fut + Send + Sync,
+    Fut: Future<Output = usize> + Send,
+{
+    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> usize {
+        self(metadata).await
+    }
+}
+
 /// Represents a **select task frame** which wraps multiple task frames and picks one task frame based
 /// on an accessor function. This task frame type acts as a **composite node** within the task frame hierarchy, 
 /// facilitating a way to conditionally execute a task frame from a list of multiple. The results
@@ -63,7 +79,7 @@ use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, Ta
 /// ```
 pub struct SelectTaskFrame {
     tasks: Vec<Arc<dyn TaskFrame>>,
-    accessor: Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>) -> usize + 'static + Send + Sync>,
+    accessor: Arc<dyn FrameAccessorFunc>,
     on_start: TaskStartEvent,
     on_end: TaskEndEvent,
     pub on_select: ArcTaskEvent<Arc<dyn TaskFrame>>,
@@ -72,7 +88,7 @@ pub struct SelectTaskFrame {
 impl SelectTaskFrame {
     pub fn new(
         tasks: Vec<Arc<dyn TaskFrame>>, 
-        accessor: impl Fn(Arc<dyn ExposedTaskMetadata>) -> usize + 'static + Send + Sync
+        accessor: impl FrameAccessorFunc + 'static
     ) -> Self {
         Self {
             tasks,
@@ -91,7 +107,7 @@ impl TaskFrame for SelectTaskFrame {
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
-        let idx = (self.accessor)(metadata.clone());
+        let idx = self.accessor.execute(metadata.clone()).await;
         if let Some(frame) = self.tasks.get(idx) {
             emitter.emit(metadata.clone(), self.on_select.clone(), frame.clone()).await;
             return frame.execute(metadata, emitter).await;
