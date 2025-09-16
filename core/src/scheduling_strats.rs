@@ -49,7 +49,7 @@ pub struct CancelPreviousSchedulingPolicy(ArcSwapOption<JoinHandle<()>>);
 
 impl Default for CancelPreviousSchedulingPolicy {
     fn default() -> Self {
-        Self::new()
+        Self(ArcSwapOption::new(None))
     }
 }
 
@@ -83,7 +83,7 @@ pub struct CancelCurrentSchedulingPolicy(Arc<AtomicBool>);
 
 impl Default for CancelCurrentSchedulingPolicy {
     fn default() -> Self {
-        Self::new()
+        Self(Arc::new(AtomicBool::new(true)))
     }
 }
 

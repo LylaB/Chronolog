@@ -82,7 +82,12 @@ pub struct DefaultTaskMetadata {
 
 impl Default for DefaultTaskMetadata {
     fn default() -> Self {
-        Self::new()
+        DefaultTaskMetadata {
+            max_runs: None,
+            runs: AtomicU64::new(0),
+            last_execution: ArcSwap::from_pointee(Local::now()),
+            debug_label: Uuid::new_v4().to_string(),
+        }
     }
 }
 
