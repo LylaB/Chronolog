@@ -62,8 +62,8 @@ consist of:
   
 ## 🔄 Task Behavior And Management
 Fine grain control over task behavior, listening to lifecycle or local task frame events, controlling how the task
-is rescheduled via scheduling strategies, controlling dependencies of a task, creating tags for the task... etc. Want
-to dynamically re-schedule, remove or schedule tasks at any point throughout your program? Chronolog has you covered
+is rescheduled via scheduling strategies, controlling dependencies of a task... etc. Want to dynamically re-schedule, 
+remove or schedule tasks at any point throughout your program? Chronolog has you covered
 
 ## 📋 Scheduler Composition
 Just like tasks. Chronolog gives the ability to also restructure schedulers to fit your needs, no need to depend
@@ -72,17 +72,17 @@ defined by the default scheduler, here are the composites a scheduler requires:
 - **Clock** This is a mechanism for tracking time, while by default it uses the system clock, one can also use a virtual
 clock for simulating scenarios, such as unit testing, benchmarking or stress-testing
 <br /> <br />
-- **Scheduler Engine** The actual core that drives the Scheduler, it handles one or multiple **Schedule Workers**. The 
-scheduler engine acts as the brain that schedules the tasks and allocates the tasks to a scheduler worker based on a couple 
-of policies. The algorithm works by ranking each worker with a score based on the set of tags this task contains, once
-it scans all workers, then it chooses the one with the maximum score
+- **Scheduler Engine** The actual core that drives the Scheduler, it sleeps til the earliest task is due, then
+gets the instance from ``TaskStore``, emits relevant events and hands out the task to ``TaskDispatcher``, then repeats
+the process for the next task
 <br /> <br />
-- **Schedule Workers** These are workers which execute tasks given to them, they are separate threads, and they communicate
-  with the Scheduler Engine. These workers can define tags to illustrate what they support
+- **Task Store** It stores a task in some form (either be in-memory or persist them), the scheduler may interact with
+the task store via getting the earliest task, rescheduling the same task instance or from methods from the scheduler which 
+act as wrappers around the task store mechanism
 <br /> <br />
-- **Schedule Worker Policies** These are specific policies for how to allocate a task to a scheduler worker, policies
-can be stacked with one and another for better task allocation on schedule workers. Policies can also be defined by the
-developer using the library
+- **Task Dispatcher** It is the main logic block that handles execution logic, typically when the scheduler hands out a
+task to the dispatcher, it tries to find the worker (which are units that concurrently execute) with the most minimum work 
+it has based on priority level, once it finds it, that is where the task's schedule strategy is executed
 
 ## 📡 Language Agnostic Communication
 Emit a task in python, listen to task events in javascript, write task logic in rust. No more doing trickery to
@@ -116,6 +116,8 @@ frequent scheduled tasks, it maintains this precision even when clogged by multi
 <br /> <br />
 - **📦 Tiny But Mighty** Tired of large sized packages, taking forever to compile, consuming disk space and so on? We too,
 as such, Chronolog is tiny about **~1MB** in size
+<br /> <br />
 <img align="center" src="assets/Chronolog Divider.png" />
 When it comes to contributing and forking. Chronolog is free and open source to use, only restricted by the lightweight
-**Apache License v2.0** <strong>(this license only applies to when the project enters beta)</strong>. Contributions are welcome with wide open arms, chronolog is looking to foster a community
+**Apache License v2.0** <strong>(this license only applies to when the project enters beta)</strong>. Contributions
+are welcome with wide open arms, chronolog is looking to foster a community
