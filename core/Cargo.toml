@@ -14,8 +14,8 @@ typed-builder = "0.22.0"
 once_cell = "1.21.3"
 arc-swap = "1.7.1"
 tokio = { version = "1.47.1", features = ["time", "rt-multi-thread", "macros", "sync"] }
-nohash-hasher = "0.2.0"
 chrono = { version = "0.4.41", features = ["now"] }
 cron-parser = "0.10.0"
 uuid = { version = "1.18.1", features = ["v4"] }
 rand = { version = "0.10.0-rc.0", features = ["small_rng"] }
+dashmap = "7.0.0-rc2"
