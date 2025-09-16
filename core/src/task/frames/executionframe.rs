@@ -1,12 +1,15 @@
-use std::fmt::Debug;
-use crate::task::{Arc, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
+use crate::task::{
+    Arc, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame,
+    TaskStartEvent,
+};
 use async_trait::async_trait;
+use std::fmt::Debug;
 
-/// Represents an **execution task frame** that directly hosts and executes a function. This task frame type 
+/// Represents an **execution task frame** that directly hosts and executes a function. This task frame type
 /// acts asa **leaf node** within the task frame hierarchy. Its primary role is to serve as the final
-/// unit of execution in a task workflow, as it only encapsulates a single function / future to be 
+/// unit of execution in a task workflow, as it only encapsulates a single function / future to be
 /// executed, no further tasks can be chained or derived from it
-/// 
+///
 /// # Events
 /// When it comes to events, [`ExecutionTaskFrame`] comes with the default set of events, as
 /// there is nothing else to listen for / subscribe to
@@ -31,19 +34,19 @@ use async_trait::async_trait;
 pub struct ExecutionTaskFrame<F: Send + Sync> {
     func: F,
     on_start: TaskStartEvent,
-    on_end: TaskEndEvent
+    on_end: TaskEndEvent,
 }
 
 impl<F, Fut> ExecutionTaskFrame<F>
 where
     Fut: Future<Output = Result<(), TaskError>> + Send,
-    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync
+    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync,
 {
     pub fn new(func: F) -> Self {
         ExecutionTaskFrame {
             func,
             on_start: TaskEvent::new(),
-            on_end: TaskEvent::new()
+            on_end: TaskEvent::new(),
         }
     }
 }
@@ -52,12 +55,12 @@ where
 impl<F, Fut> TaskFrame for ExecutionTaskFrame<F>
 where
     Fut: Future<Output = Result<(), TaskError>> + Send,
-    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync
+    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync,
 {
     async fn execute(
         &self,
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
-        _emitter: Arc<TaskEventEmitter>
+        _emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         (self.func)(metadata).await
     }

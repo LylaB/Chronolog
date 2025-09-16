@@ -1,8 +1,8 @@
+use crate::schedule::TaskSchedule;
+use chrono::{DateTime, Local, TimeDelta};
 use std::ops::Add;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::{DateTime, Local, TimeDelta};
-use crate::schedule::TaskSchedule;
 
 /// [`TaskScheduleInterval`] is a straightforward implementation of the [`TaskSchedule`] trait
 /// that executes tasks at a fixed interval.
@@ -50,7 +50,10 @@ impl TaskScheduleInterval {
 }
 
 impl TaskSchedule for TaskScheduleInterval {
-    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    fn next_after(
+        &self,
+        time: &DateTime<Local>,
+    ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
         Ok(time.add(self.0))
     }
 }

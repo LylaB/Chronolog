@@ -12,5 +12,5 @@ pub enum TaskPriority {
     #[default]
     MODERATE,
 
-    LOW
+    LOW,
 }

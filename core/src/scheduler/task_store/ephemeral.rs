@@ -1,17 +1,21 @@
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize};
-use std::time::{SystemTime};
-use async_trait::async_trait;
-use dashmap::DashMap;
-use tokio::sync::{Mutex};
-use crate::clock::{SchedulerClock};
+use crate::clock::SchedulerClock;
 use crate::scheduler::task_store::SchedulerTaskStore;
 use crate::task::Task;
 use crate::utils::{date_time_to_system_time, system_time_to_date_time};
+use async_trait::async_trait;
+use dashmap::DashMap;
+use std::cmp::{Ordering, Reverse};
+use std::collections::BinaryHeap;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::time::SystemTime;
+use tokio::sync::Mutex;
 
-pub(crate) struct EphemeralScheduledItem(pub(crate) Arc<Task>, pub(crate) SystemTime, pub(crate) usize);
+pub(crate) struct EphemeralScheduledItem(
+    pub(crate) Arc<Task>,
+    pub(crate) SystemTime,
+    pub(crate) usize,
+);
 
 impl Eq for EphemeralScheduledItem {}
 
@@ -37,7 +41,7 @@ impl Ord for EphemeralScheduledItem {
 pub struct EphemeralDefaultTaskStore {
     earliest_sorted: Mutex<BinaryHeap<Reverse<EphemeralScheduledItem>>>,
     tasks: DashMap<usize, Arc<Task>>,
-    id: AtomicUsize
+    id: AtomicUsize,
 }
 
 impl EphemeralDefaultTaskStore {
@@ -45,7 +49,7 @@ impl EphemeralDefaultTaskStore {
         Arc::new(Self {
             earliest_sorted: Mutex::new(BinaryHeap::new()),
             tasks: DashMap::new(),
-            id: AtomicUsize::new(0)
+            id: AtomicUsize::new(0),
         })
     }
 }

@@ -80,16 +80,19 @@ where
         metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
-        let primary_result = self.primary
+        let primary_result = self
+            .primary
             .execute(metadata.clone(), emitter.clone())
             .await;
         match primary_result {
             Err(err) => {
-                emitter.emit(
-                    metadata.clone(),
-                    self.on_fallback.clone(),
-                    (self.secondary.clone(), err),
-                ).await;
+                emitter
+                    .emit(
+                        metadata.clone(),
+                        self.on_fallback.clone(),
+                        (self.secondary.clone(), err),
+                    )
+                    .await;
 
                 self.secondary.execute(metadata, emitter).await
             }

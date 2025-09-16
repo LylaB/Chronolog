@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use chrono::{DateTime, Local};
 use crate::schedule::TaskSchedule;
+use chrono::{DateTime, Local};
+use std::sync::Arc;
 
 /// [`TaskScheduleCron`] is an implementation of the [`TaskSchedule`] trait that executes tasks
 /// according to a cron expression.
@@ -40,7 +40,10 @@ impl TaskScheduleCron {
 }
 
 impl TaskSchedule for TaskScheduleCron {
-    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    fn next_after(
+        &self,
+        time: &DateTime<Local>,
+    ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
         Ok(cron_parser::parse(&self.0, time).unwrap())
     }
 }

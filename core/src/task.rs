@@ -1,14 +1,14 @@
-pub mod frames;
 pub mod error_handler;
 pub mod events;
+pub mod frames;
 pub mod metadata;
 pub mod priority;
 
-pub use frames::*;
-pub use error_handler::*;
-pub use metadata::*;
 pub use crate::schedule::*;
+pub use error_handler::*;
 pub use events::*;
+pub use frames::*;
+pub use metadata::*;
 pub use priority::*;
 
 use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
@@ -131,7 +131,9 @@ pub struct Task<E: TaskExtension = ()> {
 
 impl Debug for Task<()> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Task").field(&self.metadata.debug_label()).finish()
+        f.debug_tuple("Task")
+            .field(&self.metadata.debug_label())
+            .finish()
     }
 }
 
@@ -182,16 +184,23 @@ impl<E: TaskExtension> Task<E> {
 impl<E: TaskExtension> Task<E> {
     pub async fn run(&self, emitter: Arc<TaskEventEmitter>) -> Result<(), TaskError> {
         self.metadata.runs().fetch_add(1, Ordering::Relaxed);
-        emitter.emit(self.metadata(), self.frame().on_start(), ()).await;
-        let result = self.frame().execute(self.metadata.as_exposed(), emitter.clone()).await;
+        emitter
+            .emit(self.metadata(), self.frame().on_start(), ())
+            .await;
+        let result = self
+            .frame()
+            .execute(self.metadata.as_exposed(), emitter.clone())
+            .await;
         let err = result.clone().err();
 
-        emitter.emit(self.metadata(), self.frame().on_end(), err.clone()).await;
+        emitter
+            .emit(self.metadata(), self.frame().on_end(), err.clone())
+            .await;
 
         if let Some(error) = err {
             let error_ctx = TaskErrorContext {
                 error,
-                metadata: self.metadata.as_exposed().clone()
+                metadata: self.metadata.as_exposed().clone(),
             };
             self.error_handler().on_error(error_ctx).await;
         }

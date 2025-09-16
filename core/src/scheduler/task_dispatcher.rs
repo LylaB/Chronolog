@@ -2,10 +2,10 @@ pub mod default;
 
 pub use default::*;
 
-use std::sync::Arc;
-use async_trait::async_trait;
-use tokio::sync::broadcast;
 use crate::task::{Task, TaskEventEmitter};
+use async_trait::async_trait;
+use std::sync::Arc;
+use tokio::sync::broadcast;
 
 /// [`SchedulerTaskDispatcher`] is a trait for implementing a scheduler task dispatcher. It acts as
 /// a central point for when a task wants to execute, on the default implementation, it routes the
@@ -18,6 +18,6 @@ pub trait SchedulerTaskDispatcher: Send + Sync {
         sender: Arc<broadcast::Sender<(Arc<Task>, usize)>>,
         emitter: Arc<TaskEventEmitter>,
         task: Arc<Task>,
-        idx: usize
+        idx: usize,
     );
 }

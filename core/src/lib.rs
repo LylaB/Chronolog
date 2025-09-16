@@ -1,9 +1,9 @@
 #![allow(unused)]
 
-pub mod task;
-pub mod errors;
-pub mod scheduler;
-pub mod schedule;
-pub(crate) mod utils;
-pub mod scheduling_strats;
 pub mod clock;
+pub mod errors;
+pub mod schedule;
+pub mod scheduler;
+pub mod scheduling_strats;
+pub mod task;
+pub(crate) mod utils;

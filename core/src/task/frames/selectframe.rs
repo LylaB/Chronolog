@@ -1,7 +1,10 @@
-use std::sync::Arc;
-use async_trait::async_trait;
 use crate::errors::ChronologErrors;
-use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent};
+use crate::task::{
+    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
+    TaskFrame, TaskStartEvent,
+};
+use async_trait::async_trait;
+use std::sync::Arc;
 
 #[async_trait]
 pub trait FrameAccessorFunc: Send + Sync {
@@ -20,7 +23,7 @@ where
 }
 
 /// Represents a **select task frame** which wraps multiple task frames and picks one task frame based
-/// on an accessor function. This task frame type acts as a **composite node** within the task frame hierarchy, 
+/// on an accessor function. This task frame type acts as a **composite node** within the task frame hierarchy,
 /// facilitating a way to conditionally execute a task frame from a list of multiple. The results
 /// from the selected frame are returned when executed
 ///
@@ -68,7 +71,7 @@ where
 ///         Arc::new(secondary_frame),
 ///         Arc::new(tertiary_frame)
 ///     ],
-/// 
+///
 ///     // Simple example, runs always is above zero so we can safely subtract one off it
 ///     |metadata| (metadata.runs() - 1) as usize % 3
 /// );
@@ -86,16 +89,13 @@ pub struct SelectTaskFrame {
 }
 
 impl SelectTaskFrame {
-    pub fn new(
-        tasks: Vec<Arc<dyn TaskFrame>>, 
-        accessor: impl FrameAccessorFunc + 'static
-    ) -> Self {
+    pub fn new(tasks: Vec<Arc<dyn TaskFrame>>, accessor: impl FrameAccessorFunc + 'static) -> Self {
         Self {
             tasks,
             accessor: Arc::new(accessor),
             on_start: TaskEvent::new(),
             on_end: TaskEvent::new(),
-            on_select: TaskEvent::new()
+            on_select: TaskEvent::new(),
         }
     }
 }
@@ -109,10 +109,15 @@ impl TaskFrame for SelectTaskFrame {
     ) -> Result<(), TaskError> {
         let idx = self.accessor.execute(metadata.clone()).await;
         if let Some(frame) = self.tasks.get(idx) {
-            emitter.emit(metadata.clone(), self.on_select.clone(), frame.clone()).await;
+            emitter
+                .emit(metadata.clone(), self.on_select.clone(), frame.clone())
+                .await;
             return frame.execute(metadata, emitter).await;
         }
-        Err(Arc::new(ChronologErrors::TaskIndexOutOfBounds(idx, self.tasks.len())))
+        Err(Arc::new(ChronologErrors::TaskIndexOutOfBounds(
+            idx,
+            self.tasks.len(),
+        )))
     }
 
     fn on_start(&self) -> TaskStartEvent {

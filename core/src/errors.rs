@@ -10,10 +10,14 @@ pub enum ChronologErrors {
     #[error("`{0}` was aborted")]
     TaskAborted(String),
 
-    #[error("Task frame index `{0}` is out of bounds for SelectFrame with task frame size `{1}` element(s)")]
+    #[error(
+        "Task frame index `{0}` is out of bounds for SelectFrame with task frame size `{1}` element(s)"
+    )]
     TaskIndexOutOfBounds(usize, usize),
-    
-    #[error("ConditionalTaskFrame returned false with on_error set to true, as such this error returns")]
+
+    #[error(
+        "ConditionalTaskFrame returned false with on_error set to true, as such this error returns"
+    )]
     TaskConditionFail,
 
     #[error("`{0}` Timed out")]

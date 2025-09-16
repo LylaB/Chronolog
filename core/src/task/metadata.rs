@@ -1,10 +1,10 @@
+use crate::task::Task;
+use arc_swap::ArcSwap;
+use chrono::{DateTime, Local};
 use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use arc_swap::ArcSwap;
-use chrono::{DateTime, Local};
 use uuid::Uuid;
-use crate::task::Task;
 
 /// The exposed immutable subset of [`TaskMetadata`], contains methods to get the metadata
 /// of the task and a convenience method for getting the remaining runs via calling
@@ -19,9 +19,8 @@ pub trait ExposedTaskMetadata: Send + Sync {
     fn last_execution(&self) -> Arc<DateTime<Local>>;
     fn debug_label(&self) -> &str;
     fn remaining_runs(&self) -> Option<NonZeroU64> {
-        self.max_runs().map(|max_runs| {
-            NonZeroU64::new(max_runs.get().saturating_sub(self.runs())).unwrap()
-        })
+        self.max_runs()
+            .map(|max_runs| NonZeroU64::new(max_runs.get().saturating_sub(self.runs())).unwrap())
     }
 }
 
@@ -97,7 +96,7 @@ impl DefaultTaskMetadata {
             max_runs: None,
             runs: AtomicU64::new(0),
             last_execution: ArcSwap::from_pointee(Local::now()),
-            debug_label
+            debug_label,
         }
     }
 }

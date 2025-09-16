@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use async_trait::async_trait;
-use crate::task::{Task, TaskError};
 use crate::task::metadata::ExposedTaskMetadata;
+use crate::task::{Task, TaskError};
+use async_trait::async_trait;
+use std::sync::Arc;
 
 /// An error context object, it cannot be created by outside parties and is handed by the
 /// scheduling strategy to control. The error context contains the error and an exposed set of

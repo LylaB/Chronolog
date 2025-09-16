@@ -2,11 +2,11 @@ pub mod ephemeral;
 
 pub use ephemeral::*;
 
-use std::sync::Arc;
-use std::time::SystemTime;
-use async_trait::async_trait;
 use crate::clock::SchedulerClock;
 use crate::task::Task;
+use async_trait::async_trait;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 /// [`SchedulerTaskStore`] is a trait for implementing a storage mechanism for tasks, it allows
 /// for retrieving the earliest task, storing a task with its task schedule, removing a task via
@@ -19,7 +19,7 @@ pub trait SchedulerTaskStore: Send + Sync {
     /// Pops the earliest task by modifying any internal storage
     async fn pop(&self);
 
-        /// Checks if an index of a task exists (i.e. The task is registered)
+    /// Checks if an index of a task exists (i.e. The task is registered)
     async fn exists(&self, idx: usize) -> bool;
 
     /// Reschedules a task instance based on index, it automatically calculates

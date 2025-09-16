@@ -1,8 +1,8 @@
+use crate::clock::{AdvanceableScheduleClock, SchedulerClock};
+use async_trait::async_trait;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use async_trait::async_trait;
 use tokio::sync::Notify;
-use crate::clock::{AdvanceableScheduleClock, SchedulerClock};
 
 /// [`VirtualClock`] is an implementation of the [`SchedulerClock`] trait, it acts as a mock object, allowing
 /// to simulate time without the waiting around. This can especially be useful for unit tests,
@@ -28,7 +28,7 @@ impl VirtualClock {
                 initial_time
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .unwrap()
-                    .as_millis() as u64
+                    .as_millis() as u64,
             ),
             notify: Notify::new(),
         }
@@ -45,12 +45,14 @@ impl VirtualClock {
 #[async_trait]
 impl AdvanceableScheduleClock for VirtualClock {
     async fn advance(&self, duration: Duration) {
-        self.current_time.fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
+        self.current_time
+            .fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
         self.notify.notify_waiters();
     }
 
     async fn advance_to(&self, to: SystemTime) {
-        let to_millis = to.duration_since(SystemTime::UNIX_EPOCH)
+        let to_millis = to
+            .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
         self.current_time.fetch_add(to_millis, Ordering::Relaxed);

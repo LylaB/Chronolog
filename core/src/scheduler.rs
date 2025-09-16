@@ -1,21 +1,20 @@
-pub mod task_store;
 pub mod task_dispatcher;
+pub mod task_store;
 
+use crate::clock::SchedulerClock;
 use crate::clock::SystemClock;
-use std::sync::Arc;
-use arc_swap::{ArcSwapOption};
+use crate::scheduler::task_dispatcher::{DefaultTaskDispatcher, SchedulerTaskDispatcher};
+use crate::scheduler::task_store::{EphemeralDefaultTaskStore, SchedulerTaskStore};
+use crate::task::{Task, TaskEventEmitter};
+use arc_swap::ArcSwapOption;
 use once_cell::sync::Lazy;
-use tokio::sync::{broadcast, Mutex};
+use std::sync::Arc;
+use tokio::sync::{Mutex, broadcast};
 use tokio::task::JoinHandle;
 use typed_builder::TypedBuilder;
-use crate::clock::SchedulerClock;
-use crate::scheduler::task_dispatcher::{SchedulerTaskDispatcher, DefaultTaskDispatcher};
-use crate::scheduler::task_store::{SchedulerTaskStore, EphemeralDefaultTaskStore};
-use crate::task::{Task, TaskEventEmitter};
 
-pub static CHRONOLOG_SCHEDULER: Lazy<Arc<Scheduler>> = Lazy::new(|| {
-        Arc::new(Scheduler::builder().build())
-});
+pub static CHRONOLOG_SCHEDULER: Lazy<Arc<Scheduler>> =
+    Lazy::new(|| Arc::new(Scheduler::builder().build()));
 
 #[derive(TypedBuilder)]
 #[builder(build_method(into = Scheduler))]
@@ -50,7 +49,7 @@ impl From<SchedulerConfig> for Scheduler {
             process: ArcSwapOption::new(None),
             schedule_tx: Arc::new(schedule_tx),
             schedule_rx: Arc::new(Mutex::new(schedule_rx)),
-            notifier: Arc::new(tokio::sync::Notify::new())
+            notifier: Arc::new(tokio::sync::Notify::new()),
         }
     }
 }
@@ -65,7 +64,7 @@ pub struct Scheduler {
     process: ArcSwapOption<JoinHandle<()>>,
     schedule_tx: ArcSchedulerTX,
     schedule_rx: ArcSchedulerRX,
-    notifier: Arc<tokio::sync::Notify>
+    notifier: Arc<tokio::sync::Notify>,
 }
 
 impl Scheduler {
@@ -74,52 +73,52 @@ impl Scheduler {
     }
 
     pub async fn start(&self) {
-        let emitter = Arc::new(TaskEventEmitter {_private: ()});
+        let emitter = Arc::new(TaskEventEmitter { _private: () });
         let store_clone = self.store.clone();
         let clock_clone = self.clock.clone();
         let dispatcher_clone = self.dispatcher.clone();
         let scheduler_send = self.schedule_tx.clone();
         let scheduler_receive = self.schedule_rx.clone();
         let notifier = self.notifier.clone();
-        self.process.store(Some(Arc::new(
+        self.process.store(Some(Arc::new(tokio::spawn(async move {
+            let double_clock_clone = clock_clone.clone();
+            let double_store_clone = store_clone.clone();
+            let double_notifier_clone = notifier.clone();
             tokio::spawn(async move {
-                let double_clock_clone = clock_clone.clone();
-                let double_store_clone = store_clone.clone();
-                let double_notifier_clone = notifier.clone();
-                tokio::spawn(async move {
-                    while let Ok((task, idx)) =
-                        scheduler_receive.lock().await.recv().await
-                    {
-                        double_store_clone.reschedule(double_clock_clone.clone(), task, idx).await;
-                        double_notifier_clone.notify_waiters();
-                    }
-                });
+                while let Ok((task, idx)) = scheduler_receive.lock().await.recv().await {
+                    double_store_clone
+                        .reschedule(double_clock_clone.clone(), task, idx)
+                        .await;
+                    double_notifier_clone.notify_waiters();
+                }
+            });
 
-                loop {
-                    if let Some((task, time, idx)) = store_clone.retrieve().await {
-                        tokio::select! {
-                            _ = clock_clone.idle_to(time) => {
-                                store_clone.pop().await;
-                                if !store_clone.exists(idx).await { continue; }
-                                dispatcher_clone.clone()
-                                .dispatch(scheduler_send.clone(), emitter.clone(), task, idx)
-                                .await;
-                                continue;
-                            }
+            loop {
+                if let Some((task, time, idx)) = store_clone.retrieve().await {
+                    tokio::select! {
+                        _ = clock_clone.idle_to(time) => {
+                            store_clone.pop().await;
+                            if !store_clone.exists(idx).await { continue; }
+                            dispatcher_clone.clone()
+                            .dispatch(scheduler_send.clone(), emitter.clone(), task, idx)
+                            .await;
+                            continue;
+                        }
 
-                            _ = notifier.notified() => {
-                                continue;
-                            }
+                        _ = notifier.notified() => {
+                            continue;
                         }
                     }
                 }
-            })
-        )))
+            }
+        }))))
     }
 
     pub async fn abort(&self) {
         let process = self.process.swap(None);
-        if let Some(p) = process { p.abort(); }
+        if let Some(p) = process {
+            p.abort();
+        }
     }
 
     pub async fn schedule(&self, task: Task) -> usize {

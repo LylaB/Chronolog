@@ -1,8 +1,8 @@
+use crate::task::{Task, TaskEventEmitter};
+use arc_swap::ArcSwapOption;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use arc_swap::ArcSwapOption;
 use tokio::task::JoinHandle;
-use crate::task::{Task, TaskEventEmitter};
 
 /// [`ScheduleStrategy`] defines how the task behaves when being overlapped by the same instance
 /// task or by others. Strategies receive a task, an event emitter and return a local timestamp

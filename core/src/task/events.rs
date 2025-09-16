@@ -1,11 +1,11 @@
+use crate::task::metadata::ExposedTaskMetadata;
+use async_trait::async_trait;
+use dashmap::DashMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use async_trait::async_trait;
-use dashmap::DashMap;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use crate::task::metadata::ExposedTaskMetadata;
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
 pub type TaskEndEvent = ArcTaskEvent<Option<TaskError>>;
