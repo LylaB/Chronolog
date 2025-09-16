@@ -17,8 +17,8 @@ use std::sync::Arc;
 /// - [`TaskScheduleInterval`] executes a task on an interval basis
 /// - [`TaskScheduleCalendar`] executes a task based on the provided cron expression as a string
 /// - [`TaskScheduleCron`] defines a human-friendly schedule on when the task runs, it provides fine-grain
-/// control on each individual field via [`TaskCalendarField`], it can be at an exact date, an interval basis... etc.
-/// It is a good alternative to cron, as it provides second and millisecond accuracy plus being more human-friendly
+///   control on each individual field via [`TaskCalendarField`], it can be at an exact date, an interval basis... etc.
+///   It is a good alternative to cron, as it provides second and millisecond accuracy plus being more human-friendly
 ///
 /// The schedule by itself is only useful when used together with a [`Scheduler`]
 ///

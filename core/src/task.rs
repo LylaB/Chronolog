@@ -79,31 +79,31 @@ impl<E: TaskExtension> From<TaskConfig<E>> for Task<E> {
 /// # Task Composite Parts
 ///
 /// - **[`TaskMetadata`]** The <u>State</u>, by default (the parameter is optional to define)
-/// it contains information such as the run-count, the maximum runs allowed, the last time the task
-/// was executed... etc. The task metadata can be exposed in the form of [`ExposedTaskMetadata`],
-/// giving an immutable version of it, typically this metadata is exposed to the task frame, the error
-/// handler and this exposed version can be used outside via [`Task::metadata`]
+///   it contains information such as the run-count, the maximum runs allowed, the last time the task
+///   was executed... etc. The task metadata can be exposed in the form of [`ExposedTaskMetadata`],
+///   giving an immutable version of it, typically this metadata is exposed to the task frame, the error
+///   handler and this exposed version can be used outside via [`Task::metadata`]
 ///
 /// - **[`TaskFrame`]** The <u>What</u> of the task, the logic part of the task. When executed, task
-/// frames get the exposed metadata and an event emitter for task events (lifecycle or local events,
-/// see [`TaskEvent`] for more context), the emitter can be used to emit their own events. Task frames
-/// can be decorated with other task frames to form a chain of task frames, allowing for complex
-/// logic (and policy logic) to be injected to the task without manual writing. There are various
-/// implementations of task frane and the task frame can be accessed via [`Task::frame`]
+///   frames get the exposed metadata and an event emitter for task events (lifecycle or local events,
+///   see [`TaskEvent`] for more context), the emitter can be used to emit their own events. Task frames
+///   can be decorated with other task frames to form a chain of task frames, allowing for complex
+///   logic (and policy logic) to be injected to the task without manual writing. There are various
+///   implementations of task frane and the task frame can be accessed via [`Task::frame`]
 ///
 /// - **[`TaskSchedule`]** The <u>When</u> will the task execute, it is used for calculating the next
-/// time to invoke this task. This part is useful to the scheduler mostly, tho outside parties can
-/// also use it via [`Task::schedule`]
+///   time to invoke this task. This part is useful to the scheduler mostly, tho outside parties can
+///   also use it via [`Task::schedule`]
 ///
 /// - **[`TaskErrorHandler`]** An error handler for the task, in case things go south. By default,
-/// it doesn't need to be supplied, and it will silently ignore the error, tho ideally in most cases
-/// it should be supplied for fine-grain error handling. When invoked, the task error handler gets
-/// a context object hosting the exposed metadata and the error. It is meant to return nothing, just
-/// handle the error the task gave away
+///   it doesn't need to be supplied, and it will silently ignore the error, tho ideally in most cases
+///   it should be supplied for fine-grain error handling. When invoked, the task error handler gets
+///   a context object hosting the exposed metadata and the error. It is meant to return nothing, just
+///   handle the error the task gave away
 ///
 /// - **[`ScheduleStrategy`]** Defines how it is scheduled and how it handles task overlapping
-/// behavior. By default, (the parameter is optional to define), it runs sequentially. i.e. The task
-/// only reschedules once it is fully finished
+///   behavior. By default, (the parameter is optional to define), it runs sequentially. i.e. The task
+///   only reschedules once it is fully finished
 /// ---
 ///
 /// In order to actually use the task, the developer must register it in a [`Scheduler`], could be
@@ -142,6 +142,8 @@ impl Debug for Task<()> {
 pub trait TaskExtension: Send + Sync {}
 impl TaskExtension for () {}
 
+type DefaultExtensiveBuilder = TaskConfigBuilder<(), (((),), (), (), (), (), (), ())>;
+
 impl Task {
     /// Creates a simple task from a schedule and an interval. Mostly used as a convenient method
     /// for simple enough tasks that don't need any of the other composite parts
@@ -165,7 +167,7 @@ impl Task {
     /// Task::extend_builder()
     ///     .extension(())
     /// ```
-    pub fn builder() -> TaskConfigBuilder<(), (((),), (), (), (), (), (), ())> {
+    pub fn builder() -> DefaultExtensiveBuilder {
         TaskConfig::builder().extension(())
     }
 }

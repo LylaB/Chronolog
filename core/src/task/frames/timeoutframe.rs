@@ -11,7 +11,7 @@ use crate::task::{ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, Ta
 /// - Executes the **wrapped task frame**.
 /// - Tracks a timer while the task frame executes.
 /// - If the task executes longer than a specified duration, an error 
-/// is thrown and the task is aborted
+///   is thrown and the task is aborted
 ///
 /// # ⚠ Important Note ⚠
 /// Due to a limitation, if the task frame executes CPU-Bound logic mostly and does not yield,

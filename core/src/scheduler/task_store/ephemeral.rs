@@ -21,6 +21,7 @@ impl PartialEq<Self> for EphemeralScheduledItem {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd<Self> for EphemeralScheduledItem {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.1.partial_cmp(&other.1)
@@ -57,7 +58,7 @@ impl SchedulerTaskStore for EphemeralDefaultTaskStore {
         let item = &rev_item.0;
         Some((item.0.clone(), item.1, item.2))
     }
-    
+
     async fn pop(&self) {
         self.earliest_sorted.lock().await.pop();
     }

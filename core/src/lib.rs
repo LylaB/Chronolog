@@ -1,4 +1,4 @@
-#[allow(unused)]
+#![allow(unused)]
 
 pub mod task;
 pub mod errors;

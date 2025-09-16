@@ -83,19 +83,18 @@ where
         let primary_result = self.primary
             .execute(metadata.clone(), emitter.clone())
             .await;
-        let secondary_result = match primary_result {
+        match primary_result {
             Err(err) => {
                 emitter.emit(
                     metadata.clone(),
                     self.on_fallback.clone(),
                     (self.secondary.clone(), err),
                 ).await;
-                let result = self.secondary.execute(metadata, emitter).await;
-                result
+
+                self.secondary.execute(metadata, emitter).await
             }
             res => res,
-        };
-        secondary_result
+        }
     }
 
     fn on_start(&self) -> TaskStartEvent {

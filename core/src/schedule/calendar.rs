@@ -25,7 +25,7 @@ use typed_builder::TypedBuilder;
 /// - **Every(u32)** tells the scheduler to schedule this field on an interval basis
 /// - **Exactly(u32)** tells the scheduler to schedule this field at an exact value
 /// - **Custom(Arc<dyn Fn(u32) -> u32 + Send + Sync>)** triggers a custom function to run, where its argument
-/// is the current time's field and returns the corresponding field to use (behaves like Exactly but as a function)
+///   is the current time's field and returns the corresponding field to use (behaves like Exactly but as a function)
 ///
 /// # See
 /// - [`TaskSchedule`]

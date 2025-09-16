@@ -19,12 +19,9 @@ pub trait ExposedTaskMetadata: Send + Sync {
     fn last_execution(&self) -> Arc<DateTime<Local>>;
     fn debug_label(&self) -> &str;
     fn remaining_runs(&self) -> Option<NonZeroU64> {
-        match self.max_runs() {
-            Some(max_runs) => {
-                Some(NonZeroU64::new(max_runs.get().saturating_sub(self.runs())).unwrap())
-            }
-            None => None,
-        }
+        self.max_runs().map(|max_runs| {
+            NonZeroU64::new(max_runs.get().saturating_sub(self.runs())).unwrap()
+        })
     }
 }
 
@@ -39,18 +36,18 @@ pub trait ExposedTaskMetadata: Send + Sync {
 ///
 /// By default, task metadata contains:
 /// - **Maximum runs**, the maximum runs this task can run before stopping the rescheduling (by default
-/// it is set to run for infinite times), accessed via [`TaskMetadata::max_runs`] or [`ExposedTaskMetadata::max_runs`]
+///   it is set to run for infinite times), accessed via [`TaskMetadata::max_runs`] or [`ExposedTaskMetadata::max_runs`]
 ///
 /// - **Run Count**, the number of times this task has run throughout its lifetime, accessed via
-/// [`TaskMetadata::runs`] or [`ExposedTaskMetadata::runs`]
+///   [`TaskMetadata::runs`] or [`ExposedTaskMetadata::runs`]
 ///
 /// - **Last Execution**, the point in which the task was last executed at, if the task hasn't
-/// executed then it returns none, accessed via [`TaskMetadata::last_execution`] or
-/// [`ExposedTaskMetadata::last_execution`]
+///   executed then it returns none, accessed via [`TaskMetadata::last_execution`] or
+///   [`ExposedTaskMetadata::last_execution`]
 ///
 /// - **Debug Label** a label (can be an ID, a name... etc.) for identifying a task, by default, it
-/// constructs a UUID per task, can be accessed via [`TaskMetadata::max_runs`] or
-/// [`ExposedTaskMetadata::max_runs`]
+///   constructs a UUID per task, can be accessed via [`TaskMetadata::max_runs`] or
+///   [`ExposedTaskMetadata::max_runs`]
 pub trait TaskMetadata: Send + Sync {
     /// Gets a mutable container (`AtomicU64`) of the maximum number of runs allowed
     fn max_runs(&self) -> Option<NonZeroU64>;
@@ -82,6 +79,12 @@ pub struct DefaultTaskMetadata {
     pub runs: AtomicU64,
     pub last_execution: ArcSwap<DateTime<Local>>,
     pub debug_label: String,
+}
+
+impl Default for DefaultTaskMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DefaultTaskMetadata {

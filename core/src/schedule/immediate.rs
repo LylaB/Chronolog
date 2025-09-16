@@ -18,6 +18,6 @@ impl TaskSchedule for TaskScheduleImmediate {
         &self,
         time: &DateTime<Local>,
     ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
-        Ok(time.clone())
+        Ok(*time)
     }
 }

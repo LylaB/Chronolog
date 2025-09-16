@@ -55,13 +55,16 @@ impl From<SchedulerConfig> for Scheduler {
     }
 }
 
+type ArcSchedulerTX = Arc<broadcast::Sender<(Arc<Task>, usize)>>;
+type ArcSchedulerRX = Arc<Mutex<broadcast::Receiver<(Arc<Task>, usize)>>>;
+
 pub struct Scheduler {
     dispatcher: Arc<dyn SchedulerTaskDispatcher>,
     store: Arc<dyn SchedulerTaskStore>,
     clock: Arc<dyn SchedulerClock>,
     process: ArcSwapOption<JoinHandle<()>>,
-    schedule_tx: Arc<broadcast::Sender<(Arc<Task>, usize)>>,
-    schedule_rx: Arc<Mutex<broadcast::Receiver<(Arc<Task>, usize)>>>,
+    schedule_tx: ArcSchedulerTX,
+    schedule_rx: ArcSchedulerRX,
     notifier: Arc<tokio::sync::Notify>
 }
 
@@ -84,8 +87,8 @@ impl Scheduler {
                 let double_store_clone = store_clone.clone();
                 let double_notifier_clone = notifier.clone();
                 tokio::spawn(async move {
-                    while let Some((task, idx)) =
-                        scheduler_receive.lock().await.recv().await.ok()
+                    while let Ok((task, idx)) =
+                        scheduler_receive.lock().await.recv().await
                     {
                         double_store_clone.reschedule(double_clock_clone.clone(), task, idx).await;
                         double_notifier_clone.notify_waiters();
@@ -116,12 +119,11 @@ impl Scheduler {
 
     pub async fn abort(&self) {
         let process = self.process.swap(None);
-        process.map(|p| p.abort());
+        if let Some(p) = process { p.abort(); }
     }
 
     pub async fn schedule(&self, task: Task) -> usize {
-        let idx = self.store.store(self.clock.clone(), task).await;
-        idx
+        self.store.store(self.clock.clone(), task).await
     }
 
     pub async fn cancel(&self, idx: usize) {
