@@ -1,7 +1,7 @@
-use std::time::Duration;
 use chronolog_core::clock::AdvanceableScheduleClock;
 use chronolog_core::clock::SchedulerClock;
 use chronolog_core::clock::VirtualClock;
+use std::time::Duration;
 
 macro_rules! assert_approx {
     ($left: expr, $right: expr, $epsilon: expr) => {{
