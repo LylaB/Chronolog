@@ -1,4 +1,5 @@
 pub mod conditionframe;
+pub mod dependencyframe;
 pub mod executionframe;
 pub mod fallbackframe;
 pub mod parallelframe;
@@ -6,7 +7,6 @@ pub mod retryframe;
 pub mod selectframe;
 pub mod sequentialframe;
 pub mod timeoutframe;
-pub mod dependencyframe;
 
 use crate::task::conditionframe::FramePredicateFunc;
 use crate::task::events::TaskEventEmitter;
@@ -14,6 +14,7 @@ use crate::task::retryframe::RetryBackoffStrategy;
 use crate::task::{TaskEndEvent, TaskError, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 pub use conditionframe::ConditionalFrame;
+pub use dependencyframe::DependencyTaskFrame;
 pub use executionframe::ExecutionTaskFrame;
 pub use fallbackframe::FallbackTaskFrame;
 pub use parallelframe::ParallelTaskFrame;
