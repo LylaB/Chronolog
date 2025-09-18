@@ -9,6 +9,7 @@ pub mod sequentialframe;
 pub mod timeoutframe;
 
 use crate::task::conditionframe::FramePredicateFunc;
+use crate::task::dependency::FrameDependency;
 use crate::task::events::TaskEventEmitter;
 use crate::task::retryframe::RetryBackoffStrategy;
 use crate::task::{TaskEndEvent, TaskError, TaskMetadata, TaskStartEvent};
@@ -25,7 +26,6 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 pub use timeoutframe::TimeoutTaskFrame;
-use crate::task::dependency::FrameDependency;
 
 /// [`TaskFrame`] represents a unit of work which hosts the actual computation logic for the [`Scheduler`]
 /// to invoke, this is a part of the task system. [`TaskFrame`] encapsulates mainly the async execution logic
@@ -163,7 +163,7 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
 
     async fn with_dependency(
         self,
-        dependency: impl FrameDependency + 'static
+        dependency: impl FrameDependency + 'static,
     ) -> TaskFrameBuilder<DependencyTaskFrame<T>> {
         let dependent: DependencyTaskFrame<T> = DependencyTaskFrame::builder()
             .task(self.0)
@@ -175,7 +175,7 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
 
     async fn with_dependencies(
         self,
-        dependencies: Vec<Arc<dyn FrameDependency>>
+        dependencies: Vec<Arc<dyn FrameDependency>>,
     ) -> TaskFrameBuilder<DependencyTaskFrame<T>> {
         let dependent: DependencyTaskFrame<T> = DependencyTaskFrame::builder()
             .task(self.0)
