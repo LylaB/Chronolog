@@ -1,13 +1,13 @@
-use std::fmt::{Debug, Display, Formatter};
 use crate::task::Task;
 use arc_swap::ArcSwap;
+use async_trait::async_trait;
 use chrono::{DateTime, Local};
+use dashmap::DashMap;
+use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU64;
 use std::ops::{Add, Deref};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use async_trait::async_trait;
-use dashmap::DashMap;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 /// [`ObserverFieldListener`] is the mechanism that drives the reactivity of [`ObserverField`],
@@ -18,13 +18,14 @@ pub trait ObserverFieldListener<T: Send + Sync + 'static>: Send + Sync {
 }
 
 #[async_trait]
-impl<T, F> ObserverFieldListener<T> for F
+impl<T, F, Fut> ObserverFieldListener<T> for F
 where
     T: Send + Sync + 'static,
-    F: for<'a> Fn(Arc<T>) + Send + Sync,
+    F: (for<'a> Fn(Arc<T>) -> Fut) + Send + Sync,
+    Fut: Future<Output = ()> + Send + 'static,
 {
     async fn listen(&self, value: Arc<T>) {
-        (self)(value)
+        (self)(value).await;
     }
 }
 
@@ -38,14 +39,14 @@ where
 /// used in metadata to ensure listeners react to changes made to the field
 pub struct ObserverField<T: Send + Sync + 'static> {
     value: ArcSwap<T>,
-    listeners: Arc<DashMap<Uuid, Arc<dyn ObserverFieldListener<T>>>>
+    listeners: Arc<DashMap<Uuid, Arc<dyn ObserverFieldListener<T>>>>,
 }
 
 impl<T: Send + Sync + 'static> ObserverField<T> {
     pub fn new(initial: T) -> Self {
         Self {
             value: ArcSwap::from_pointee(initial),
-            listeners: Arc::new(DashMap::new())
+            listeners: Arc::new(DashMap::new()),
         }
     }
 
@@ -148,9 +149,9 @@ impl<T: Send + Sync + Clone + 'static> Clone for ObserverField<T> {
 ///   constructs a UUID per task, can be accessed via [`TaskMetadata::debug_label`]
 pub trait TaskMetadata: Send + Sync {
     fn max_runs(&self) -> Option<NonZeroU64>;
-    fn runs(&self) -> &ObserverField<u64>;
-    fn last_execution(&self) -> &ObserverField<DateTime<Local>>;
-    fn debug_label(&self) -> &ObserverField<String>;
+    fn runs(&self) -> ObserverField<u64>;
+    fn last_execution(&self) -> ObserverField<DateTime<Local>>;
+    fn debug_label(&self) -> ObserverField<String>;
 }
 
 /// A default implementation of the [`TaskMetadata`], it contains the bare minimum information
@@ -200,15 +201,15 @@ impl TaskMetadata for DefaultTaskMetadata {
         self.max_runs
     }
 
-    fn runs(&self) -> &ObserverField<u64> {
-        &self.runs
+    fn runs(&self) -> ObserverField<u64> {
+        self.runs.clone()
     }
 
-    fn last_execution(&self) -> &ObserverField<DateTime<Local>> {
-        &self.last_execution
+    fn last_execution(&self) -> ObserverField<DateTime<Local>> {
+        self.last_execution.clone()
     }
 
-    fn debug_label(&self) -> &ObserverField<String> {
-        &self.debug_label
+    fn debug_label(&self) -> ObserverField<String> {
+        self.debug_label.clone()
     }
 }
