@@ -17,7 +17,7 @@ the license in a nutshell says:
 
 Chronolog is the **ULTIMATE** unopinionated scheduling library which all developers dreamed of.
 Schedule thousands of tasks with the efficiency of rust while still using it in multiple programming languages
-such as <u>Python</u>, <u>Rust</u>, <u>Javascript(and Typescript)</u> and even <u>Java</u>. The library is designed to be
+such as <u>Python</u>, <u>Rust</u>, <u>JavaScript(and TypeScript)</u> and even <u>Java</u>. The library is designed to be
 as easy to use as possible while being powerful, flexible and extendable
 
 <img align="center" src="assets/Chronolog Divider.png" />
@@ -25,7 +25,7 @@ Since Chronolog is a fully featured scheduling library, it provides many feature
 
 ## 🧩 Task Composition
 Instead of thinking a task is just some executable, Chronolog thinks of tasks as components in a group instead, allowing 
-the expression and reuse of complex logic easily while also seperating concerns and giving overall flexibility, tasks 
+the expression and reuse of complex logic easily while also separating concerns and giving overall flexibility, tasks 
 consist of:
   - ***Task Metadata:*** The <ins>State</ins> of the task, anything data-related. Internally, this data is mutable, metadata
   can also be exposed restricting write access to any data, think of it as a global state for the entire task. In most
@@ -85,7 +85,7 @@ task to the dispatcher, it tries to find the worker (which are units that concur
 it has based on priority level, once it finds it, that is where the task's schedule strategy is executed
 
 ## 📡 Language Agnostic Communication
-Emit a task in python, listen to task events in javascript, write task logic in rust. No more doing trickery to
+Emit a task in python, listen to task events in JavaScript, write task logic in rust. No more doing trickery to
 work around the limitation of a library/framework being limited to one specific programming language. Chronolog is
 the central hub for scheduling
 
@@ -119,5 +119,5 @@ as such, Chronolog is tiny about **~1MB** in size
 <br /> <br />
 <img align="center" src="assets/Chronolog Divider.png" />
 When it comes to contributing and forking. Chronolog is free and open source to use, only restricted by the lightweight
-**Apache License v2.0** <strong>(this license only applies to when the project enters beta)</strong>. Contributions
-are welcome with wide open arms, chronolog is looking to foster a community
+**MIT License** <strong>(this license only applies to when the project enters beta)</strong>, contributions
+are welcome with wide open arms as Chronolog is looking to foster a community
