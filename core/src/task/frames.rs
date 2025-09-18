@@ -25,6 +25,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 pub use timeoutframe::TimeoutTaskFrame;
+use crate::task::dependency::FrameDependency;
 
 /// [`TaskFrame`] represents a unit of work which hosts the actual computation logic for the [`Scheduler`]
 /// to invoke, this is a part of the task system. [`TaskFrame`] encapsulates mainly the async execution logic
@@ -158,6 +159,30 @@ impl<T: TaskFrame> TaskFrameBuilder<T> {
             .error_on_false(false)
             .build();
         TaskFrameBuilder(condition)
+    }
+
+    async fn with_dependency(
+        self,
+        dependency: impl FrameDependency + 'static
+    ) -> TaskFrameBuilder<DependencyTaskFrame<T>> {
+        let dependent: DependencyTaskFrame<T> = DependencyTaskFrame::builder()
+            .task(self.0)
+            .dependencies(vec![Arc::new(dependency)])
+            .build();
+
+        TaskFrameBuilder(dependent)
+    }
+
+    async fn with_dependencies(
+        self,
+        dependencies: Vec<Arc<dyn FrameDependency>>
+    ) -> TaskFrameBuilder<DependencyTaskFrame<T>> {
+        let dependent: DependencyTaskFrame<T> = DependencyTaskFrame::builder()
+            .task(self.0)
+            .dependencies(dependencies)
+            .build();
+
+        TaskFrameBuilder(dependent)
     }
 
     pub fn build(self) -> T {
