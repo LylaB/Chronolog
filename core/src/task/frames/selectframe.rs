@@ -1,23 +1,20 @@
 use crate::errors::ChronologErrors;
-use crate::task::{
-    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
-    TaskFrame, TaskStartEvent,
-};
+use crate::task::{ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 use std::sync::Arc;
 
 #[async_trait]
 pub trait FrameAccessorFunc: Send + Sync {
-    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> usize;
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>) -> usize;
 }
 
 #[async_trait]
 impl<F, Fut> FrameAccessorFunc for F
 where
-    F: Fn(Arc<dyn ExposedTaskMetadata>) -> Fut + Send + Sync,
+    F: Fn(Arc<dyn TaskMetadata>) -> Fut + Send + Sync,
     Fut: Future<Output = usize> + Send,
 {
-    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> usize {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>) -> usize {
         self(metadata).await
     }
 }
@@ -104,7 +101,7 @@ impl SelectTaskFrame {
 impl TaskFrame for SelectTaskFrame {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let idx = self.accessor.execute(metadata.clone()).await;

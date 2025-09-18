@@ -1,8 +1,5 @@
 use crate::errors::ChronologErrors;
-use crate::task::{
-    ArcTaskEvent, ExposedTaskMetadata, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent,
-    TaskEventEmitter, TaskFrame, TaskStartEvent,
-};
+use crate::task::{ArcTaskEvent, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
@@ -17,16 +14,16 @@ use typed_builder::TypedBuilder;
 
 #[async_trait]
 pub trait FramePredicateFunc: Send + Sync {
-    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> bool;
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>) -> bool;
 }
 
 #[async_trait]
 impl<F, Fut> FramePredicateFunc for F
 where
-    F: Fn(Arc<dyn ExposedTaskMetadata>) -> Fut + Send + Sync,
+    F: Fn(Arc<dyn TaskMetadata>) -> Fut + Send + Sync,
     Fut: Future<Output = bool> + Send,
 {
-    async fn execute(&self, metadata: Arc<dyn ExposedTaskMetadata>) -> bool {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>) -> bool {
         self(metadata).await
     }
 }
@@ -222,7 +219,7 @@ macro_rules! define_events {
 impl<T: TaskFrame> TaskFrame for ConditionalFrame<T> {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         execute_func_impl!(self, emitter, metadata);
@@ -240,7 +237,7 @@ impl<T: TaskFrame> TaskFrame for ConditionalFrame<T> {
 impl<T: TaskFrame, F: TaskFrame> TaskFrame for ConditionalFrame<T, F> {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         execute_func_impl!(self, emitter, metadata);

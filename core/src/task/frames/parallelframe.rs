@@ -1,8 +1,5 @@
 use crate::policy_match;
-use crate::task::{
-    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
-    TaskFrame, TaskStartEvent, sequentialframe::SequentialTaskFrame,
-};
+use crate::task::{ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent, sequentialframe::SequentialTaskFrame, TaskMetadata};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -113,7 +110,7 @@ impl ParallelTaskFrame {
 impl TaskFrame for ParallelTaskFrame {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let (result_tx, mut result_rx) = mpsc::unbounded_channel();

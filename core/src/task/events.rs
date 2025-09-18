@@ -1,4 +1,3 @@
-use crate::task::metadata::ExposedTaskMetadata;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::collections::HashMap;
@@ -6,13 +5,14 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use crate::task::TaskMetadata;
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
 pub type TaskEndEvent = ArcTaskEvent<Option<TaskError>>;
 pub type ArcTaskEvent<P> = Arc<TaskEvent<P>>;
 pub type TaskError = Arc<dyn Debug + Send + Sync>;
 
-pub type DynListenerFunc<P> = Arc<dyn Fn(Arc<dyn ExposedTaskMetadata>, P) + Send + Sync>;
+pub type DynListenerFunc<P> = Arc<dyn Fn(Arc<dyn TaskMetadata>, Arc<P>) + Send + Sync>;
 
 /// [`TaskEvent`] defines an event which may (or may not, depending on how the frame implementation
 /// handles this task event) execute. This is the main system used for listening to various events,
@@ -46,7 +46,7 @@ impl<P: Send + 'static> TaskEvent<P> {
     /// Subscribes a listener to the task event, returning an identifier for that listener / subscriber
     pub async fn subscribe(
         &self,
-        func: impl Fn(Arc<dyn ExposedTaskMetadata>, P) + Send + Sync + 'static,
+        func: impl Fn(Arc<dyn TaskMetadata>, Arc<P>) + Send + Sync + 'static,
     ) -> Uuid {
         let id = Uuid::new_v4();
         self.listeners.insert(id, Arc::new(func));
@@ -68,21 +68,20 @@ pub struct TaskEventEmitter {
 
 impl TaskEventEmitter {
     /// Emits the event, notifying all subscribers / listeners
-    pub async fn emit<P: Send + Sync + Clone>(
+    pub async fn emit<P: Send + Sync + Clone + 'static>(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata>,
+        metadata: Arc<dyn TaskMetadata>,
         event: Arc<TaskEvent<P>>,
         payload: P,
     ) {
-        std::thread::scope(|s| {
-            for listener in event.listeners.iter() {
-                let cloned_listener = listener.value().clone();
-                let cloned_metadata = metadata.clone();
-                let cloned_payload = payload.clone();
-                s.spawn(move || {
-                    cloned_listener(cloned_metadata, cloned_payload);
-                });
-            }
-        });
+        let payload_arc = Arc::new(payload);
+        for listener in event.listeners.iter() {
+            let cloned_listener = listener.value().clone();
+            let cloned_metadata = metadata.clone();
+            let cloned_payload = payload_arc.clone();
+            tokio::spawn(async move {
+                cloned_listener(cloned_metadata, cloned_payload);
+            });
+        }
     }
 }

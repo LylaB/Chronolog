@@ -1,7 +1,4 @@
-use crate::task::{
-    Arc, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame,
-    TaskStartEvent,
-};
+use crate::task::{Arc, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 use std::fmt::Debug;
 
@@ -40,7 +37,7 @@ pub struct ExecutionTaskFrame<F: Send + Sync> {
 impl<F, Fut> ExecutionTaskFrame<F>
 where
     Fut: Future<Output = Result<(), TaskError>> + Send,
-    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync,
+    F: Fn(Arc<dyn TaskMetadata + Send + Sync>) -> Fut + Send + Sync,
 {
     pub fn new(func: F) -> Self {
         ExecutionTaskFrame {
@@ -55,11 +52,11 @@ where
 impl<F, Fut> TaskFrame for ExecutionTaskFrame<F>
 where
     Fut: Future<Output = Result<(), TaskError>> + Send,
-    F: Fn(Arc<dyn ExposedTaskMetadata + Send + Sync>) -> Fut + Send + Sync,
+    F: Fn(Arc<dyn TaskMetadata + Send + Sync>) -> Fut + Send + Sync,
 {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         _emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         (self.func)(metadata).await

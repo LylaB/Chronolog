@@ -1,7 +1,4 @@
-use crate::task::{
-    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
-    TaskFrame, TaskStartEvent,
-};
+use crate::task::{ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -77,7 +74,7 @@ where
 {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let primary_result = self

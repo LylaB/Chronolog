@@ -1,5 +1,4 @@
-use crate::task::metadata::ExposedTaskMetadata;
-use crate::task::{Task, TaskError};
+use crate::task::{Task, TaskError, TaskMetadata};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -9,7 +8,7 @@ use std::sync::Arc;
 /// and [`TaskErrorContext::metadata`] respectively
 pub struct TaskErrorContext {
     pub(crate) error: TaskError,
-    pub(crate) metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+    pub(crate) metadata: Arc<dyn TaskMetadata + Send + Sync>,
 }
 
 impl TaskErrorContext {
@@ -19,7 +18,7 @@ impl TaskErrorContext {
     }
 
     /// Gets the exposed metadata
-    pub fn metadata(&self) -> Arc<dyn ExposedTaskMetadata + Send + Sync> {
+    pub fn metadata(&self) -> Arc<dyn TaskMetadata + Send + Sync> {
         self.metadata.clone()
     }
 }
@@ -51,8 +50,8 @@ impl TaskErrorHandler for PanicTaskErrorHandler {
     }
 }
 
-/// An implementation of [`TaskErrorHandler`] to silently ignore errors, in most cases this
-/// should not be used in production-grade applications as it makes debugging harder, however,
+/// An implementation of [`TaskErrorHandler`] to silently ignore errors, in most cases, this
+/// should not be used in production-grade applications as it makes debugging harder. However,
 /// for small demos, or if all the possible errors do not contain any valuable information
 ///
 /// This is the default option for [`Task`]

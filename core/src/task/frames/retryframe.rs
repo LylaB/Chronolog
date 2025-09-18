@@ -1,6 +1,4 @@
-use crate::task::{
-    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskStartEvent,
-};
+use crate::task::{ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskMetadata, TaskStartEvent};
 use crate::task::{TaskEventEmitter, TaskFrame};
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -170,7 +168,7 @@ impl<T: TaskFrame + 'static, T2: RetryBackoffStrategy> RetriableTaskFrame<T, T2>
 impl<T: TaskFrame + 'static, T2: RetryBackoffStrategy> TaskFrame for RetriableTaskFrame<T, T2> {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let mut error: Option<TaskError> = None;

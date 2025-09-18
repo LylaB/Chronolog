@@ -16,7 +16,7 @@ use crate::task::frames::retryframe::RetryBackoffStrategy;
 use std::any::Any;
 use std::error::Error;
 use std::fmt::Debug;
-use std::ops::Deref;
+use std::ops::{Add, Deref};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use typed_builder::TypedBuilder;
@@ -183,13 +183,13 @@ impl<E: TaskExtension> Task<E> {
 
 impl<E: TaskExtension> Task<E> {
     pub async fn run(&self, emitter: Arc<TaskEventEmitter>) -> Result<(), TaskError> {
-        self.metadata.runs().fetch_add(1, Ordering::Relaxed);
+        self.metadata.runs().update_internal(self.metadata.runs().get().add(1u64));
         emitter
             .emit(self.metadata(), self.frame().on_start(), ())
             .await;
         let result = self
             .frame()
-            .execute(self.metadata.as_exposed(), emitter.clone())
+            .execute(self.metadata.clone(), emitter.clone())
             .await;
         let err = result.clone().err();
 
@@ -200,7 +200,7 @@ impl<E: TaskExtension> Task<E> {
         if let Some(error) = err {
             let error_ctx = TaskErrorContext {
                 error,
-                metadata: self.metadata.as_exposed().clone(),
+                metadata: self.metadata.clone(),
             };
             self.error_handler().on_error(error_ctx).await;
         }
@@ -209,8 +209,8 @@ impl<E: TaskExtension> Task<E> {
     }
 
     /// Gets the exposed metadata (immutable) for outside parties
-    pub fn metadata(&self) -> Arc<dyn ExposedTaskMetadata> {
-        self.metadata.as_exposed().clone()
+    pub fn metadata(&self) -> Arc<dyn TaskMetadata> {
+        self.metadata.clone()
     }
 
     /// Gets the frame for outside parties

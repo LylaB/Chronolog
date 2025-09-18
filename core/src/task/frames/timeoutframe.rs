@@ -1,7 +1,4 @@
-use crate::task::{
-    ArcTaskEvent, ExposedTaskMetadata, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
-    TaskFrame, TaskStartEvent,
-};
+use crate::task::{ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -75,7 +72,7 @@ impl<T: TaskFrame + 'static> TimeoutTaskFrame<T> {
 impl<T: TaskFrame + 'static> TaskFrame for TimeoutTaskFrame<T> {
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError> {
         let result = tokio::time::timeout(

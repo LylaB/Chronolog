@@ -6,12 +6,12 @@ pub mod retryframe;
 pub mod selectframe;
 pub mod sequentialframe;
 pub mod timeoutframe;
+pub mod dependencyframe;
 
 use crate::task::conditionframe::FramePredicateFunc;
 use crate::task::events::TaskEventEmitter;
-use crate::task::metadata::ExposedTaskMetadata;
 use crate::task::retryframe::RetryBackoffStrategy;
-use crate::task::{TaskEndEvent, TaskError, TaskStartEvent};
+use crate::task::{TaskEndEvent, TaskError, TaskMetadata, TaskStartEvent};
 use async_trait::async_trait;
 pub use conditionframe::ConditionalFrame;
 pub use executionframe::ExecutionTaskFrame;
@@ -55,7 +55,7 @@ pub trait TaskFrame: Send + Sync {
     /// The main execution logic of the task, it is meant as an internal method
     async fn execute(
         &self,
-        metadata: Arc<dyn ExposedTaskMetadata + Send + Sync>,
+        metadata: Arc<dyn TaskMetadata + Send + Sync>,
         emitter: Arc<TaskEventEmitter>,
     ) -> Result<(), TaskError>;
 

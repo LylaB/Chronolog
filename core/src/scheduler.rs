@@ -88,7 +88,7 @@ impl Scheduler {
             tokio::spawn(async move {
                 while let Ok((task, idx)) = scheduler_receive.lock().await.recv().await {
                     if let Some(max_runs) = task.metadata.max_runs()
-                        && task.metadata.runs().load(Ordering::Relaxed) >= max_runs.get()
+                        && *task.metadata.runs().get() >= max_runs.get()
                     {
                         continue;
                     }
