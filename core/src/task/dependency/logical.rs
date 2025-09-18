@@ -87,24 +87,15 @@ impl LogicalDependency {
 macro_rules! implement_toggle_functionality {
     ($self: expr, $value: expr) => {
         match $self {
-            LogicalDependency::AND {
-                is_enabled,
-                ..
-            } => {
+            LogicalDependency::AND { is_enabled, .. } => {
                 is_enabled.store($value, Ordering::Relaxed);
             }
 
-            LogicalDependency::XOR {
-                is_enabled,
-                ..
-            } => {
+            LogicalDependency::XOR { is_enabled, .. } => {
                 is_enabled.store($value, Ordering::Relaxed);
             }
 
-            LogicalDependency::OR {
-                is_enabled,
-                ..
-            } => {
+            LogicalDependency::OR { is_enabled, .. } => {
                 is_enabled.store($value, Ordering::Relaxed);
             }
 
@@ -119,23 +110,17 @@ macro_rules! implement_toggle_functionality {
 impl FrameDependency for LogicalDependency {
     async fn is_resolved(&self) -> bool {
         match self {
-            LogicalDependency::AND {
-                dep1,
-                dep2,
-                ..
-            } => dep1.is_resolved().await && dep2.is_resolved().await,
+            LogicalDependency::AND { dep1, dep2, .. } => {
+                dep1.is_resolved().await && dep2.is_resolved().await
+            }
 
-            LogicalDependency::XOR {
-                dep1,
-                dep2,
-                ..
-            } => dep1.is_resolved().await ^ dep2.is_resolved().await,
+            LogicalDependency::XOR { dep1, dep2, .. } => {
+                dep1.is_resolved().await ^ dep2.is_resolved().await
+            }
 
-            LogicalDependency::OR {
-                dep1,
-                dep2,
-                ..
-            } => dep1.is_resolved().await || dep2.is_resolved().await,
+            LogicalDependency::OR { dep1, dep2, .. } => {
+                dep1.is_resolved().await || dep2.is_resolved().await
+            }
 
             LogicalDependency::NOT(dep, _) => !dep.is_resolved().await,
         }
@@ -151,20 +136,11 @@ impl FrameDependency for LogicalDependency {
 
     async fn is_enabled(&self) -> bool {
         match self {
-            LogicalDependency::AND {
-                is_enabled,
-                ..
-            } => is_enabled.load(Ordering::Relaxed),
+            LogicalDependency::AND { is_enabled, .. } => is_enabled.load(Ordering::Relaxed),
 
-            LogicalDependency::XOR {
-                is_enabled,
-                ..
-            } => is_enabled.load(Ordering::Relaxed),
+            LogicalDependency::XOR { is_enabled, .. } => is_enabled.load(Ordering::Relaxed),
 
-            LogicalDependency::OR {
-                is_enabled,
-                ..
-            } => is_enabled.load(Ordering::Relaxed),
+            LogicalDependency::OR { is_enabled, .. } => is_enabled.load(Ordering::Relaxed),
 
             LogicalDependency::NOT(_, is_enabled) => is_enabled.load(Ordering::Relaxed),
         }
