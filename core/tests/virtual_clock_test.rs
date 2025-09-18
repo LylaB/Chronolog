@@ -1,28 +1,22 @@
-//This is for the test fo src/clock/virtual_clock.rs
-//I will try to cover all the edge cases I can think of
-//I will try to keep the name same and will add test in front of the name
 use chronolog_core::clock::AdvanceableScheduleClock;
 use chronolog_core::clock::SchedulerClock;
 use chronolog_core::clock::VirtualClock;
-use std::sync::Arc;
-use tokio::time::Duration;
- use std::time::SystemTime;
- macro_rules! assert_approx {
-  ($left: expr, $right: expr, $epsillon: expr) => {{
-      let dur = match $right.duration_since($left) {
-          Ok(dur) => dur,
-          Err(e) => e.duration()
-      };
-      
-      assert!(dur <= $epsillon)//this will panic using assert! if I am right
-  }}
+macro_rules! assert_approx {
+    ($left: expr, $right: expr, $epsilon: expr) => {{
+        let dur = match $right.duration_since($left) {
+            Ok(dur) => dur,
+            Err(e) => e.duration()
+        };
+
+        assert!(dur <= $epsilon)
+    }}
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
-    use tokio::task;
+    use std::time::{Duration, UNIX_EPOCH};
+
     #[tokio::test]
     async fn test_initial_epoch() {
         let clock = VirtualClock::from_epoch();
@@ -49,13 +43,14 @@ mod tests {
         clock.advance_to(target).await;
         assert_approx!(clock.now().await, target, Duration::from_millis(1));
     }
-#[tokio::test]
-async fn test_idle_to_simple_no_arc() {
-    let clock = VirtualClock::from_epoch();
-    let target = UNIX_EPOCH + Duration::from_secs(5);
-    clock.advance(Duration::from_secs(5)).await;
-    clock.idle_to(target).await;
-    let now = clock.now().await;
-    assert_approx!(now, target, Duration::from_millis(1));
-}
+
+    #[tokio::test]
+    async fn test_idle_to_simple_no_arc() {
+        let clock = VirtualClock::from_epoch();
+        let target = UNIX_EPOCH + Duration::from_secs(5);
+        clock.advance(Duration::from_secs(5)).await;
+        clock.idle_to(target).await;
+        let now = clock.now().await;
+        assert_approx!(now, target, Duration::from_millis(1));
+    }
 }
