@@ -5,11 +5,11 @@ macro_rules! assert_approx {
     ($left: expr, $right: expr, $epsilon: expr) => {{
         let dur = match $right.duration_since($left) {
             Ok(dur) => dur,
-            Err(e) => e.duration()
+            Err(e) => e.duration(),
         };
 
         assert!(dur <= $epsilon)
-    }}
+    }};
 }
 
 #[cfg(test)]
@@ -20,13 +20,13 @@ mod tests {
     #[tokio::test]
     async fn test_initial_epoch() {
         let clock = VirtualClock::from_epoch();
-        assert_approx!(clock.now().await, UNIX_EPOCH,Duration::from_millis(1));
+        assert_approx!(clock.now().await, UNIX_EPOCH, Duration::from_millis(1));
     }
     #[tokio::test]
     async fn test_custom_time() {
         let time0 = UNIX_EPOCH + Duration::from_secs(45);
         let clock = VirtualClock::new(time0);
-        assert_approx!(clock.now().await, time0,Duration::from_millis(1));
+        assert_approx!(clock.now().await, time0, Duration::from_millis(1));
     }
     #[tokio::test]
     async fn test_advance() {
