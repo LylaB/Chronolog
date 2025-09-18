@@ -41,7 +41,7 @@ impl DependentFailBehavior for DependentSuccessOnFail {
 #[derive(TypedBuilder)]
 #[builder(build_method(into = DependencyTaskFrame<T>))]
 pub struct DependencyTaskFrameConfig<T: TaskFrame> {
-    frame: T,
+    task: T,
     dependencies: Vec<Arc<dyn FrameDependency>>,
 
     #[builder(
@@ -54,7 +54,7 @@ pub struct DependencyTaskFrameConfig<T: TaskFrame> {
 impl<T: TaskFrame> From<DependencyTaskFrameConfig<T>> for DependencyTaskFrame<T> {
     fn from(config: DependencyTaskFrameConfig<T>) -> Self {
         Self {
-            frame: config.frame,
+            frame: config.task,
             dependencies: config.dependencies,
             on_start: TaskEvent::new(),
             on_end: TaskEvent::new(),
