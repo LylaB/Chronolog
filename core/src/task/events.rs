@@ -1,3 +1,4 @@
+use crate::task::TaskMetadata;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::collections::HashMap;
@@ -5,14 +6,33 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use crate::task::TaskMetadata;
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
 pub type TaskEndEvent = ArcTaskEvent<Option<TaskError>>;
 pub type ArcTaskEvent<P> = Arc<TaskEvent<P>>;
 pub type TaskError = Arc<dyn Debug + Send + Sync>;
 
-pub type DynListenerFunc<P> = Arc<dyn Fn(Arc<dyn TaskMetadata>, Arc<P>) + Send + Sync>;
+/// [`EventListener`] is a function tailored to listening to task events, as it accepts
+/// metadata and a payload as arguments but returns nothing, only really being useful for
+/// just listening to relevant [`TaskEvent`] fires. Functions and closures automatically implement
+/// this trait, but due to their nature they cannot persist, as a result, it is advised to create
+/// your own struct and implement this trait
+#[async_trait]
+pub trait EventListener<P: Send + Sync>: Send + Sync {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>, payload: Arc<P>);
+}
+
+#[async_trait]
+impl<P, F, Fut> EventListener<P> for F
+where
+    P: Send + Sync + 'static,
+    F: Fn(Arc<dyn TaskMetadata>, Arc<P>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>, payload: Arc<P>) {
+        (self)(metadata, payload).await;
+    }
+}
 
 /// [`TaskEvent`] defines an event which may (or may not, depending on how the frame implementation
 /// handles this task event) execute. This is the main system used for listening to various events,
@@ -32,10 +52,10 @@ pub type DynListenerFunc<P> = Arc<dyn Fn(Arc<dyn TaskMetadata>, Arc<P>) + Send +
 /// scheduler, overlapping policies and the task frame. Outside parties can listen to the event at any
 /// time they would like
 pub struct TaskEvent<P> {
-    listeners: DashMap<Uuid, DynListenerFunc<P>>,
+    listeners: DashMap<Uuid, Arc<dyn EventListener<P>>>,
 }
 
-impl<P: Send + 'static> TaskEvent<P> {
+impl<P: Send + Sync + 'static> TaskEvent<P> {
     /// Creates a task event, containing no listeners
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -44,10 +64,7 @@ impl<P: Send + 'static> TaskEvent<P> {
     }
 
     /// Subscribes a listener to the task event, returning an identifier for that listener / subscriber
-    pub async fn subscribe(
-        &self,
-        func: impl Fn(Arc<dyn TaskMetadata>, Arc<P>) + Send + Sync + 'static,
-    ) -> Uuid {
+    pub async fn subscribe(&self, func: impl EventListener<P> + 'static) -> Uuid {
         let id = Uuid::new_v4();
         self.listeners.insert(id, Arc::new(func));
         id
@@ -80,7 +97,7 @@ impl TaskEventEmitter {
             let cloned_metadata = metadata.clone();
             let cloned_payload = payload_arc.clone();
             tokio::spawn(async move {
-                cloned_listener(cloned_metadata, cloned_payload);
+                cloned_listener.execute(cloned_metadata, cloned_payload);
             });
         }
     }
