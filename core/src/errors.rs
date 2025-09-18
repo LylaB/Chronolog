@@ -20,6 +20,9 @@ pub enum ChronologErrors {
     )]
     TaskConditionFail,
 
+    #[error("Dependencies have not been resolved")]
+    TaskDependenciesUnresolved,
+
     #[error("`{0}` Timed out")]
     TimeoutError(String),
 }
