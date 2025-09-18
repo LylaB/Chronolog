@@ -1,6 +1,7 @@
 use chronolog_core::clock::AdvanceableScheduleClock;
 use chronolog_core::clock::SchedulerClock;
 use chronolog_core::clock::VirtualClock;
+
 macro_rules! assert_approx {
     ($left: expr, $right: expr, $epsilon: expr) => {{
         let dur = match $right.duration_since($left) {
