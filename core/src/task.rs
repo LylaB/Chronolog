@@ -1,3 +1,4 @@
+pub mod dependency;
 pub mod error_handler;
 pub mod events;
 pub mod frames;
@@ -183,7 +184,9 @@ impl<E: TaskExtension> Task<E> {
 
 impl<E: TaskExtension> Task<E> {
     pub async fn run(&self, emitter: Arc<TaskEventEmitter>) -> Result<(), TaskError> {
-        self.metadata.runs().update_internal(self.metadata.runs().get().add(1u64));
+        self.metadata
+            .runs()
+            .update_internal(self.metadata.runs().get().add(1u64));
         emitter
             .emit(self.metadata(), self.frame().on_start(), ())
             .await;
