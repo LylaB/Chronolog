@@ -1,5 +1,8 @@
 use crate::policy_match;
-use crate::task::{ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskStartEvent, sequentialframe::SequentialTaskFrame, TaskMetadata};
+use crate::task::{
+    ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata,
+    TaskStartEvent, sequentialframe::SequentialTaskFrame,
+};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;

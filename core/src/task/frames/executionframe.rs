@@ -1,4 +1,7 @@
-use crate::task::{Arc, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
+use crate::task::{
+    Arc, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata,
+    TaskStartEvent,
+};
 use async_trait::async_trait;
 use std::fmt::Debug;
 

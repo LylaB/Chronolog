@@ -1,5 +1,8 @@
 use crate::errors::ChronologErrors;
-use crate::task::{ArcTaskEvent, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent};
+use crate::task::{
+    ArcTaskEvent, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
+    TaskFrame, TaskMetadata, TaskStartEvent,
+};
 use async_trait::async_trait;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
