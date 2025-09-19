@@ -61,12 +61,12 @@ impl SchedulerTaskDispatcher for DefaultTaskDispatcher {
         };
 
 
-        let idx_clone = idx.clone();
+        let idx_clone = idx;
         let task_clone = task.clone();
         let sender_clone = sender.clone();
         let emitter_clone = emitter.clone();
         self.pool.spawn_with_priority(move || {
-            let idx_clone = idx.clone();
+            let idx_clone = idx_clone;
             let task_clone = task.clone();
             let sender_clone = sender.clone();
             let emitter_clone = emitter.clone();
