@@ -2,90 +2,39 @@ use crate::scheduler::task_dispatcher::SchedulerTaskDispatcher;
 use crate::task::{Task, TaskEventEmitter, TaskPriority};
 use async_trait::async_trait;
 use std::sync::Arc;
+use multipool::pool::modes::PriorityWorkStealingMode;
+use multipool::pool::ThreadPool;
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use typed_builder::TypedBuilder;
 
-pub struct DispatcherThreadCount {
-    pub critical: usize,
-    pub important: usize,
-    pub high: usize,
-    pub moderate: usize,
-    pub low: usize,
-}
-
-impl Default for DispatcherThreadCount {
-    fn default() -> Self {
-        Self {
-            critical: 2,
-            important: 4,
-            high: 8,
-            moderate: 16,
-            low: 32,
-        }
-    }
-}
-
 #[derive(TypedBuilder)]
 #[builder(build_method(into = Arc<DefaultTaskDispatcher>))]
 pub struct DefaultTaskDispatcherConfig {
-    workload: DispatcherThreadCount,
+    workers: usize,
 }
 
 impl From<DefaultTaskDispatcherConfig> for Arc<DefaultTaskDispatcher> {
-    fn from(value: DefaultTaskDispatcherConfig) -> Arc<DefaultTaskDispatcher> {
+    fn from(config: DefaultTaskDispatcherConfig) -> Arc<DefaultTaskDispatcher> {
+        let pool = multipool::ThreadPoolBuilder::new()
+            .set_work_stealing()
+            .enable_priority()
+            .num_threads(config.workers)
+            .build();
         Arc::new(DefaultTaskDispatcher {
-            critical_pool: Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(value.workload.critical)
-                    .thread_name("critical-task-worker")
-                    .build()
-                    .unwrap(),
-            ),
-            important_pool: Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(value.workload.important)
-                    .thread_name("important-task-worker")
-                    .build()
-                    .unwrap(),
-            ),
-            high_pool: Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(value.workload.high)
-                    .thread_name("high-task-worker")
-                    .build()
-                    .unwrap(),
-            ),
-            moderate_pool: Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(value.workload.moderate)
-                    .thread_name("moderate-task-worker")
-                    .build()
-                    .unwrap(),
-            ),
-            low_pool: Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(value.workload.low)
-                    .thread_name("low-task-worker")
-                    .build()
-                    .unwrap(),
-            ),
+            pool
         })
     }
 }
 
 pub struct DefaultTaskDispatcher {
-    critical_pool: Arc<Runtime>,
-    important_pool: Arc<Runtime>,
-    high_pool: Arc<Runtime>,
-    moderate_pool: Arc<Runtime>,
-    low_pool: Arc<Runtime>,
+    pool: ThreadPool<PriorityWorkStealingMode>,
 }
 
 impl DefaultTaskDispatcher {
     pub fn default_configs() -> Arc<Self> {
         DefaultTaskDispatcher::builder()
-            .workload(DispatcherThreadCount::default())
+            .workers(16)
             .build()
     }
 
@@ -103,24 +52,31 @@ impl SchedulerTaskDispatcher for DefaultTaskDispatcher {
         task: Arc<Task>,
         idx: usize,
     ) {
-        let target_pool = match task.priority {
-            TaskPriority::CRITICAL => self.critical_pool.clone(),
-
-            TaskPriority::IMPORTANT => self.important_pool.clone(),
-
-            TaskPriority::HIGH => self.high_pool.clone(),
-
-            TaskPriority::MODERATE => self.moderate_pool.clone(),
-
-            TaskPriority::LOW => self.low_pool.clone(),
+        let target_priority = match task.priority {
+            TaskPriority::CRITICAL => 0,
+            TaskPriority::IMPORTANT => 100,
+            TaskPriority::HIGH => 200,
+            TaskPriority::MODERATE => 300,
+            TaskPriority::LOW => 400,
         };
 
-        target_pool.spawn(async move {
-            task.clone()
-                .overlap_policy
-                .handle(task.clone(), emitter)
-                .await;
-            sender.send((task, idx)).unwrap();
-        });
+
+        let idx_clone = idx.clone();
+        let task_clone = task.clone();
+        let sender_clone = sender.clone();
+        let emitter_clone = emitter.clone();
+        self.pool.spawn_with_priority(move || {
+            let idx_clone = idx.clone();
+            let task_clone = task.clone();
+            let sender_clone = sender.clone();
+            let emitter_clone = emitter.clone();
+            async move {
+                task_clone.clone()
+                    .overlap_policy
+                    .handle(task_clone.clone(), emitter_clone)
+                    .await;
+                sender_clone.send((task_clone, idx_clone)).unwrap();
+            }
+        }, target_priority);
     }
 }
