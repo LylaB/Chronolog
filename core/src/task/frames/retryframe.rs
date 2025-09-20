@@ -20,6 +20,13 @@ pub trait RetryBackoffStrategy: Debug + Send + Sync + 'static {
     async fn compute(&self, retry: u32) -> Duration;
 }
 
+#[async_trait]
+impl<RBS: RetryBackoffStrategy + ?Sized> RetryBackoffStrategy for Arc<RBS> {
+    async fn compute(&self, retry: u32) -> Duration {
+        self.as_ref().compute(retry).await
+    }
+}
+
 /// [`ConstantBackoffStrategy`] is an implementation of the [`RetryBackoffStrategy`],
 /// essentially wrapping a [`Duration`]
 #[derive(Debug)]
@@ -117,7 +124,7 @@ impl<T: RetryBackoffStrategy> RetryBackoffStrategy for JitterBackoffStrategy<T> 
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs_f64(2.5), retriable_frame);
 ///
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct RetriableTaskFrame<T: 'static, T2: RetryBackoffStrategy = ConstantBackoffStrategy> {
     task: Arc<T>,
