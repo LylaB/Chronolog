@@ -37,6 +37,13 @@ pub trait TaskErrorHandler: Send + Sync {
     async fn on_error(&self, context: TaskErrorContext);
 }
 
+#[async_trait]
+impl<E: TaskErrorHandler + ?Sized> TaskErrorHandler for Arc<E> {
+    async fn on_error(&self, context: TaskErrorContext) {
+        self.as_ref().on_error(context);
+    }
+}
+
 /// An implementation of [`TaskErrorHandler`] to panic, this should not be used in production-grade
 /// applications, it is recommended to handle errors with your own logic
 /// # See
