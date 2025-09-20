@@ -1,11 +1,12 @@
 use crate::task::{
-    Arc, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata,
+    Arc, TaskEndEvent, TaskError, TaskEvent,
+    TaskEventEmitter, TaskFrame, TaskMetadata,
     TaskStartEvent,
 };
 use async_trait::async_trait;
 
 /// Represents an **execution task frame** that directly hosts and executes a function. This task frame type
-/// acts asa **leaf node** within the task frame hierarchy. Its primary role is to serve as the final
+/// acts as a **leaf node** within the task frame hierarchy. Its primary role is to serve as the final
 /// unit of execution in a task workflow, as it only encapsulates a single function / future to be
 /// executed, no further tasks can be chained or derived from it
 ///
