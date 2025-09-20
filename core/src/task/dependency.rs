@@ -32,6 +32,25 @@ pub trait FrameDependency: Send + Sync + 'static {
     async fn is_enabled(&self) -> bool;
 }
 
+#[async_trait]
+impl<D: FrameDependency + ?Sized> FrameDependency for Arc<D> {
+    async fn is_resolved(&self) -> bool {
+        self.as_ref().is_resolved().await
+    }
+
+    async fn disable(&self) {
+        self.as_ref().disable().await
+    }
+
+    async fn enable(&self) {
+        self.as_ref().enable().await
+    }
+
+    async fn is_enabled(&self) -> bool {
+        self.as_ref().is_enabled().await
+    }
+}
+
 /// Represents a resolvable frame dependency, this dependency can be
 /// automatically resolved, or it may be manually resolved
 #[async_trait]
