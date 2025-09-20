@@ -16,6 +16,13 @@ pub trait DependentFailBehavior: Send + Sync {
     async fn execute(&self) -> Result<(), TaskError>;
 }
 
+#[async_trait]
+impl<DFB: DependentFailBehavior> DependentFailBehavior for Arc<DFB> {
+    async fn execute(&self) -> Result<(), TaskError> {
+        self.as_ref().execute().await
+    }
+}
+
 /// When dependencies aren't resolved, return an error, more specifically
 /// the ``ChronologErrors::TaskDependenciesUnresolved`` error
 pub struct DependentFailureOnFail;
