@@ -49,7 +49,7 @@ use std::time::Duration;
 /// );
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs(4), timeout_frame);
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct TimeoutTaskFrame<T: 'static> {
     task: T,
