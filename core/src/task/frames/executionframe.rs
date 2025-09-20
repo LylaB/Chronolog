@@ -29,7 +29,7 @@ use std::fmt::Debug;
 /// );
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs(2), task_frame);
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct ExecutionTaskFrame<F: Send + Sync> {
     func: F,
