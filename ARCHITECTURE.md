@@ -21,7 +21,7 @@ into multiple sub parts which are used in combination to create them. Both are `
 use the underlying composites
 
 ## Task Hierarchy
-![Task Abstraction Map](assets/Task%20Abstraction.png)
+![Task Abstraction Map](assets/Task%20Abstraction.png) <br />
 Task is the most in-depth compared to the scheduler and is broken down to several parts to ensure
 extensibility. Mainly being:
 - **TaskMetadata** This is a trait that acts as a container for wrapping relevant state the task needs to track throughout its
@@ -51,7 +51,7 @@ can always implement this trait to add additional content, by default it doesn't
 should it be rescheduled when completed? Should it cancel the previous running task then run this current?
 
 ## Scheduler Hierarchy
-![Task Abstraction Map](assets/Scheduler%20Abstraction.png)
+![Task Abstraction Map](assets/Scheduler%20Abstraction.png) <br />
 Scheduler is the brain of managing when and how the task is executed, it is more simple than the task struct but still
 flexible enough. There are 3 composites:
 - **SchedulerClock** This trait defines when is "now" and how to idle (sleep). An extension trait called 
