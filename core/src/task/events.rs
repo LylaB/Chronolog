@@ -34,6 +34,13 @@ where
     }
 }
 
+#[async_trait]
+impl<P: Send + Sync + 'static, E: EventListener<P> + ?Sized> EventListener<P> for Arc<E> {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>, payload: Arc<P>) {
+        self.as_ref().execute(metadata, payload).await;
+    }
+}
+
 /// [`TaskEvent`] defines an event which may (or may not, depending on how the frame implementation
 /// handles this task event) execute. This is the main system used for listening to various events,
 /// there are 2 types of events at play, which one can listen to:
