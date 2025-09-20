@@ -47,7 +47,7 @@ implement_core_resolvent!(TaskResolveIdentityOnly, (|_| true));
 #[derive(TypedBuilder)]
 #[builder(build_method(into = TaskDependency))]
 pub struct TaskDependencyConfig {
-    task: Task,
+    task: Arc<Task>,
 
     #[builder(default = NonZeroU64::new(1).unwrap())]
     minimum_runs: NonZeroU64,
@@ -103,8 +103,10 @@ impl From<TaskDependencyConfig> for TaskDependency {
 /// it doesn't operate at all
 ///
 /// # Example
-/// ```rust
+/// ```ignore
+/// use std::num::NonZeroU64;
 /// use chronolog_core::task::{ExecutionTaskFrame, Task, TaskScheduleImmediate};
+/// use chronolog_core::task::dependency::{TaskDependency, TaskResolveIdentityOnly};
 ///
 /// let alpha_task = Task::define(
 ///     TaskScheduleImmediate,
@@ -119,9 +121,14 @@ impl From<TaskDependencyConfig> for TaskDependency {
 ///         println!("Task Frame B EXECUTED")
 ///     })
 /// );
+///
+/// let alpha_dependency = TaskDependency::builder_owned(alpha_task)
+///     .minimum_runs(NonZeroU64::new(3).unwrap())
+///     .resolve_behavior(TaskResolveIdentityOnly)
+///     .build();
 /// ```
 pub struct TaskDependency {
-    task: Task,
+    task: Arc<Task>,
     minimum_runs: NonZeroU64,
     counter: Arc<AtomicU64>,
     is_enabled: Arc<AtomicBool>,
@@ -129,8 +136,12 @@ pub struct TaskDependency {
 }
 
 impl TaskDependency {
-    pub fn builder() -> TaskDependencyConfigBuilder {
-        TaskDependencyConfig::builder()
+    pub fn builder_owned(task: Task) -> TaskDependencyConfigBuilder<((Arc<Task>,), (), ())> {
+        TaskDependencyConfig::builder().task(Arc::new(task))
+    }
+
+    pub fn builder(task: Arc<Task>) -> TaskDependencyConfigBuilder<((Arc<Task>,), (), ())> {
+        TaskDependencyConfig::builder().task(task)
     }
 }
 
