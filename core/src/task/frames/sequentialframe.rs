@@ -77,7 +77,7 @@ pub enum SequentialTaskPolicy {
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs_f64(1.25), parallel_frame);
 ///
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct SequentialTaskFrame {
     tasks: Vec<Arc<dyn TaskFrame>>,
