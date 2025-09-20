@@ -31,6 +31,13 @@ where
     }
 }
 
+#[async_trait]
+impl<F: FramePredicateFunc + ?Sized> FramePredicateFunc for Arc<F> {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>) -> bool {
+        self.as_ref().execute(metadata).await
+    }
+}
+
 //noinspection DuplicatedCode
 #[derive(TypedBuilder)]
 #[builder(build_method(into = ConditionalFrame<T, T2>))]
@@ -158,7 +165,7 @@ impl<T: TaskFrame + 'static + Send + Sync> From<NonFallbackConditionalFrameConfi
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs_f64(3.21), conditional_frame);
 ///
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct ConditionalFrame<T: 'static, T2: 'static = ()> {
     task: Arc<T>,
