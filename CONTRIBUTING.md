@@ -9,7 +9,7 @@ effective experience as possible
 
 # Code of Conduct
 By participating in this project, you are expected to uphold our Code of Conduct. Please 
-read and follow the [Code of Conduct](CONDUCT.md) to ensure a respectful and inclusive environment 
+read and follow the [Code of Conduct](CODE_OF_CONDUCT.md) to ensure a respectful and inclusive environment 
 for everyone.
 
 # Getting Started
