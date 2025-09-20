@@ -1,13 +1,10 @@
-use crate::task::Task;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU64;
-use std::ops::{Add, Deref};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use uuid::Uuid;
 
 /// [`ObserverFieldListener`] is the mechanism that drives the reactivity of [`ObserverField`],
@@ -25,7 +22,7 @@ where
     Fut: Future<Output = ()> + Send + 'static,
 {
     async fn listen(&self, value: Arc<T>) {
-        (self)(value).await;
+        self(value).await;
     }
 }
 
@@ -75,7 +72,7 @@ impl<T: Send + Sync + 'static> ObserverField<T> {
             let cloned_listener = listener.value().clone();
             let clone_value = self.value.load().clone();
             tokio::spawn(async move {
-                cloned_listener.listen(clone_value);
+                cloned_listener.listen(clone_value).await;
             });
         }
     }

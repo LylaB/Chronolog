@@ -9,7 +9,6 @@ use crate::task::{Task, TaskEventEmitter};
 use arc_swap::ArcSwapOption;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use tokio::sync::{Mutex, broadcast};
 use tokio::task::JoinHandle;
 use typed_builder::TypedBuilder;

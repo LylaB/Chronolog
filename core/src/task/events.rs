@@ -1,10 +1,8 @@
 use crate::task::TaskMetadata;
 use async_trait::async_trait;
 use dashmap::DashMap;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub type TaskStartEvent = ArcTaskEvent<()>;
@@ -30,7 +28,7 @@ where
     Fut: Future<Output = ()> + Send + 'static,
 {
     async fn execute(&self, metadata: Arc<dyn TaskMetadata>, payload: Arc<P>) {
-        (self)(metadata, payload).await;
+        self(metadata, payload).await;
     }
 }
 
@@ -104,7 +102,7 @@ impl TaskEventEmitter {
             let cloned_metadata = metadata.clone();
             let cloned_payload = payload_arc.clone();
             tokio::spawn(async move {
-                cloned_listener.execute(cloned_metadata, cloned_payload);
+                cloned_listener.execute(cloned_metadata, cloned_payload).await;
             });
         }
     }

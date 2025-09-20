@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use multipool::pool::ThreadPool;
 use multipool::pool::modes::PriorityWorkStealingMode;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 use tokio::sync::broadcast;
 use typed_builder::TypedBuilder;
 
@@ -57,9 +56,6 @@ impl SchedulerTaskDispatcher for DefaultTaskDispatcher {
         };
 
         let idx_clone = idx;
-        let task_clone = task.clone();
-        let sender_clone = sender.clone();
-        let emitter_clone = emitter.clone();
         self.pool.spawn_with_priority(
             move || {
                 let idx_clone = idx_clone;

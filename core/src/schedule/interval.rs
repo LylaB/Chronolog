@@ -53,7 +53,7 @@ impl TaskSchedule for TaskScheduleInterval {
     fn next_after(
         &self,
         time: &DateTime<Local>,
-    ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    ) -> Result<DateTime<Local>, Arc<dyn std::error::Error + 'static>> {
         Ok(time.add(self.0))
     }
 }

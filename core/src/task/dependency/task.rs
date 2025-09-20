@@ -1,8 +1,7 @@
-use crate::task::dependency::metadata::MetadataDependencyResolver;
 use crate::task::dependency::{
     FrameDependency, ResolvableFrameDependency, UnresolvableFrameDependency,
 };
-use crate::task::{ObserverField, Task, TaskError};
+use crate::task::{Task, TaskError};
 use async_trait::async_trait;
 use std::num::NonZeroU64;
 use std::sync::Arc;
@@ -71,26 +70,33 @@ impl From<TaskDependencyConfig> for TaskDependency {
 
         let counter_clone = slf.counter.clone();
         let resolve_behavior_clone = slf.resolve_behavior.clone();
+        let task_clone = slf.task.clone();
+        
+        tokio::task::spawn_blocking(move || {
+            let counter_clone = counter_clone.clone();
+            let resolve_behavior_clone = resolve_behavior_clone.clone();
+            let task_clone = task_clone.clone();
+            
+            async move {
+                task_clone
+                    .frame
+                    .on_end()
+                    .subscribe(move |_, payload: Arc<Option<TaskError>>| {
+                        let counter_clone = counter_clone.clone();
+                        let resolve_behavior_clone = resolve_behavior_clone.clone();
 
-        let counter_clone = slf.counter.clone();
-        let resolve_behavior_clone = slf.resolve_behavior.clone();
-
-        slf.task
-            .frame
-            .on_end()
-            .subscribe(move |_, payload: Arc<Option<TaskError>>| {
-                let counter_clone = counter_clone.clone();
-                let resolve_behavior_clone = resolve_behavior_clone.clone();
-
-                async move {
-                    let should_increment =
-                        resolve_behavior_clone.should_count(payload.clone()).await;
-                    if should_increment {
-                        return;
-                    }
-                    counter_clone.fetch_add(1, Ordering::Relaxed);
-                }
-            });
+                        async move {
+                            let should_increment =
+                                resolve_behavior_clone.should_count(payload.clone()).await;
+                            if should_increment {
+                                return;
+                            }
+                            counter_clone.fetch_add(1, Ordering::Relaxed);
+                        }
+                    })
+                    .await;
+            }
+        });
 
         slf
     }

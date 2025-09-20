@@ -1,6 +1,6 @@
 use crate::errors::ChronologErrors;
 use crate::task::{
-    ArcTaskEvent, FallbackTaskFrame, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
+    ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter,
     TaskFrame, TaskMetadata, TaskStartEvent,
 };
 use async_trait::async_trait;

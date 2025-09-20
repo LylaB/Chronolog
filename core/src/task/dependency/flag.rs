@@ -1,10 +1,9 @@
-use crate::task::Task;
 use crate::task::dependency::{
     FrameDependency, ResolvableFrameDependency, UnresolvableFrameDependency,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// [`FlagDependency`] is a dependency which can be enabled and disabled from outside, essentially
 /// acting as a checkbox. This dependency can be enabled/disabled and even developers can manually resolve

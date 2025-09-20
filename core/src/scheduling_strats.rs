@@ -1,4 +1,4 @@
-use crate::task::{Task, TaskErrorHandler, TaskEventEmitter};
+use crate::task::{Task, TaskEventEmitter};
 use arc_swap::ArcSwapOption;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

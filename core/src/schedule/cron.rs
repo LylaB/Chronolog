@@ -43,7 +43,7 @@ impl TaskSchedule for TaskScheduleCron {
     fn next_after(
         &self,
         time: &DateTime<Local>,
-    ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    ) -> Result<DateTime<Local>, Arc<dyn std::error::Error + 'static>> {
         Ok(cron_parser::parse(&self.0, time).unwrap())
     }
 }

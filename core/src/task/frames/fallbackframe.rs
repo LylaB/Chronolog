@@ -3,7 +3,6 @@ use crate::task::{
     TaskStartEvent,
 };
 use async_trait::async_trait;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 /// Represents a **fallback task frame** which wraps two other task frames. This task frame type acts as a

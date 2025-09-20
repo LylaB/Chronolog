@@ -1,12 +1,10 @@
 pub mod default;
 
-use std::ops::Deref;
 pub use default::*;
 
 use crate::task::{Task, TaskEventEmitter};
 use async_trait::async_trait;
 use std::sync::Arc;
-use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 
 /// [`SchedulerTaskDispatcher`] is a trait for implementing a scheduler task dispatcher. It acts as
@@ -17,7 +15,7 @@ use tokio::sync::broadcast::Sender;
 pub trait SchedulerTaskDispatcher: Send + Sync {
     async fn dispatch(
         self: Arc<Self>,
-        sender: Arc<broadcast::Sender<(Arc<Task>, usize)>>,
+        sender: Arc<Sender<(Arc<Task>, usize)>>,
         emitter: Arc<TaskEventEmitter>,
         task: Arc<Task>,
         idx: usize,

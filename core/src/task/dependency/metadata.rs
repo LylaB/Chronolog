@@ -22,7 +22,7 @@ where
     Fut: Future<Output = bool> + Send + 'static,
 {
     async fn is_resolved(&self, value: Arc<T>) -> bool {
-        (self)(value).await
+        self(value).await
     }
 }
 

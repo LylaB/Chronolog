@@ -40,7 +40,7 @@ macro_rules! policy_match {
                     )
                     .await;
             }
-            (Ok(res), _) => {
+            (Ok(_), _) => {
                 $emitter
                     .clone()
                     .emit(

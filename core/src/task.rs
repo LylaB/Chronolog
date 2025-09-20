@@ -13,13 +13,9 @@ pub use metadata::*;
 pub use priority::*;
 
 use crate::scheduling_strats::{ScheduleStrategy, SequentialSchedulingPolicy};
-use crate::task::frames::retryframe::RetryBackoffStrategy;
-use std::any::Any;
-use std::error::Error;
 use std::fmt::Debug;
-use std::ops::{Add, Deref};
+use std::ops::{Add};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use typed_builder::TypedBuilder;
 
 /*

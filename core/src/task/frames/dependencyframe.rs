@@ -5,7 +5,6 @@ use crate::task::{
     TaskStartEvent,
 };
 use async_trait::async_trait;
-use std::fmt::Debug;
 use tokio::task::JoinHandle;
 use typed_builder::TypedBuilder;
 

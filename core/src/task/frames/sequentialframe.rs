@@ -1,11 +1,9 @@
 use crate::policy_match;
-use crate::task::parallelframe::ParallelTaskFrame;
 use crate::task::{
-    ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata,
-    TaskStartEvent,
+    ArcTaskEvent, TaskEndEvent, TaskError, TaskEvent, 
+    TaskEventEmitter, TaskFrame, TaskMetadata, TaskStartEvent,
 };
 use async_trait::async_trait;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 /// Defines a policy set for the [`SequentialTaskFrame`], these change the behavior of how the

@@ -158,7 +158,7 @@ impl TaskSchedule for TaskScheduleCalendar {
     fn next_after(
         &self,
         time: &DateTime<Local>,
-    ) -> Result<DateTime<Local>, Arc<(dyn std::error::Error + 'static)>> {
+    ) -> Result<DateTime<Local>, Arc<dyn std::error::Error + 'static>> {
         let mut dates = [
             time.timestamp_subsec_millis(),
             time.second(),

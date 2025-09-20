@@ -10,10 +10,8 @@ pub use logical::*;
 pub use metadata::*;
 pub use task::*;
 
-use crate::task::ObserverField;
 use async_trait::async_trait;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 /// [`FrameDependency`] describes a dependency for [`DependencyTaskFrame`] which have to be
 /// resolved in order to proceed. Dependencies can wrap other dependencies, creating a hierarchy

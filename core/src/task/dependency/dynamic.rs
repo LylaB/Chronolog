@@ -1,11 +1,8 @@
-use crate::task::Task;
-use crate::task::dependency::{
-    FrameDependency, ResolvableFrameDependency, UnresolvableFrameDependency,
-};
+use crate::task::dependency::FrameDependency;
 use async_trait::async_trait;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 type DynamicFunction = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
 

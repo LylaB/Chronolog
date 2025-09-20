@@ -1,4 +1,4 @@
-use crate::task::{Task, TaskError, TaskMetadata};
+use crate::task::{TaskError, TaskMetadata};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -40,7 +40,7 @@ pub trait TaskErrorHandler: Send + Sync {
 #[async_trait]
 impl<E: TaskErrorHandler + ?Sized> TaskErrorHandler for Arc<E> {
     async fn on_error(&self, context: TaskErrorContext) {
-        self.as_ref().on_error(context);
+        self.as_ref().on_error(context).await;
     }
 }
 
