@@ -1,6 +1,5 @@
 use crate::task::{
-    Arc, TaskEndEvent, TaskError, TaskEvent,
-    TaskEventEmitter, TaskFrame, TaskMetadata,
+    Arc, TaskEndEvent, TaskError, TaskEvent, TaskEventEmitter, TaskFrame, TaskMetadata,
     TaskStartEvent,
 };
 use async_trait::async_trait;
