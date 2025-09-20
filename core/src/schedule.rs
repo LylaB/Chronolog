@@ -32,3 +32,9 @@ pub trait TaskSchedule: Send + Sync {
     /// to any reason, read more on the trait implementation's documentation to learn more
     fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<dyn Error>>;
 }
+
+impl<TS: TaskSchedule + ?Sized> TaskSchedule for Arc<TS> {
+    fn next_after(&self, time: &DateTime<Local>) -> Result<DateTime<Local>, Arc<dyn Error>> {
+        self.as_ref().next_after(time)
+    }
+}
