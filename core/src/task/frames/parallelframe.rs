@@ -78,7 +78,7 @@ pub enum ParallelTaskPolicy {
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs_f64(1.5), parallel_frame);
 ///
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct ParallelTaskFrame {
     tasks: Vec<Arc<dyn TaskFrame>>,
