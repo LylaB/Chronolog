@@ -12,6 +12,13 @@ pub trait FrameAccessorFunc: Send + Sync {
 }
 
 #[async_trait]
+impl<FAF: FrameAccessorFunc + ?Sized> FrameAccessorFunc for Arc<FAF> {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata>) -> usize {
+        self.as_ref().execute(metadata).await
+    }
+}
+
+#[async_trait]
 impl<F, Fut> FrameAccessorFunc for F
 where
     F: Fn(Arc<dyn TaskMetadata>) -> Fut + Send + Sync,
@@ -78,7 +85,7 @@ where
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs_f64(3.21), select_frame);
 ///
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct SelectTaskFrame {
     tasks: Vec<Arc<dyn TaskFrame>>,
