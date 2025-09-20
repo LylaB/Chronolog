@@ -127,8 +127,12 @@ impl Scheduler {
         }
     }
 
-    pub async fn schedule(&self, task: Task) -> usize {
+    pub async fn schedule(&self, task: Arc<Task>) -> usize {
         self.store.store(self.clock.clone(), task).await
+    }
+
+    pub async fn schedule_owned(&self, task: Task) -> usize {
+        self.schedule(Arc::new(task)).await
     }
 
     pub async fn cancel(&self, idx: usize) {
