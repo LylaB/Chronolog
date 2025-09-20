@@ -120,6 +120,7 @@ impl<E: TaskExtension> From<TaskConfig<E>> for Task<E> {
 /// - [`TaskSchedule`]
 /// - [`ScheduleStrategy`]
 /// - [`TaskErrorHandler`]
+#[derive(Clone)]
 pub struct Task<E: TaskExtension = ()> {
     pub(crate) metadata: Arc<dyn TaskMetadata>,
     pub(crate) frame: Arc<dyn TaskFrame>,
