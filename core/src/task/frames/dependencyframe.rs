@@ -74,20 +74,44 @@ impl<T: TaskFrame> From<DependencyTaskFrameConfig<T>> for DependencyTaskFrame<T>
 ///
 /// # Example
 /// ```ignore
+/// use std::sync::Arc;
 /// use chronolog_core::schedule::TaskScheduleInterval;
 /// use chronolog_core::scheduler::{Scheduler, CHRONOLOG_SCHEDULER};
 /// use chronolog_core::task::executionframe::ExecutionTaskFrame;
-/// use chronolog_core::task::Task;
+/// use chronolog_core::task::{DependencyTaskFrame, Task};
+/// use chronolog_core::task::dependency::TaskDependency;
 ///
-/// let task_frame = ExecutionTaskFrame::new(
+/// let exec_frame1 = ExecutionTaskFrame::new(
 ///     |_metadata| async {
-///         println!("Hello from an execution task!");
+///         println!("Hello from primary execution task!");
 ///         Ok(())
 ///     }
 /// );
 ///
-/// let task = Task::define(TaskScheduleInterval::from_secs(2), task_frame);
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// let exec_frame2 = ExecutionTaskFrame::new(
+///     |_metadata| async {
+///         println!("Hello from secondary execution task!");
+///         Ok(())
+///     }
+/// );
+///
+/// let task1 = Arc::new(Task::define(TaskScheduleInterval::from_secs(5), exec_frame1));
+/// let task1_dependency = TaskDependency::builder()
+///     .task(task1.clone())
+///     .build();
+///
+/// let dependent_frame2 = DependencyTaskFrame::builder()
+///     .task(exec_frame2)
+///     .dependencies(
+///         vec![
+///             Arc::new(task1_dependency)
+///         ]
+///     )
+///     .build();
+///
+/// let task2 = Task::define(TaskScheduleInterval::from_secs(5), dependent_frame2);
+///
+/// CHRONOLOG_SCHEDULER.schedule(task1.clone()).await;
 /// ```
 pub struct DependencyTaskFrame<T: TaskFrame> {
     frame: T,
