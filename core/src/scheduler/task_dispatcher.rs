@@ -29,8 +29,11 @@ impl<TD: SchedulerTaskDispatcher + ?Sized> SchedulerTaskDispatcher for Arc<TD> {
         sender: Arc<Sender<(Arc<Task>, usize)>>,
         emitter: Arc<TaskEventEmitter>,
         task: Arc<Task>,
-        idx: usize
+        idx: usize,
     ) {
-        self.as_ref().clone().dispatch(sender, emitter, task, idx).await
+        self.as_ref()
+            .clone()
+            .dispatch(sender, emitter, task, idx)
+            .await
     }
 }
