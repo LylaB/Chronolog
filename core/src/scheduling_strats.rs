@@ -1,7 +1,8 @@
-use crate::task::{Task, TaskEventEmitter};
+use crate::task::{Task, TaskErrorHandler, TaskEventEmitter};
 use arc_swap::ArcSwapOption;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use async_trait::async_trait;
 use tokio::task::JoinHandle;
 
 /// [`ScheduleStrategy`] defines how the task behaves when being overlapped by the same instance
@@ -9,16 +10,23 @@ use tokio::task::JoinHandle;
 /// indicating the last time it was executed. It is their duty for strategies to correctly
 /// call the lifecycle events, handle the run count and call the error handler (all of this is
 /// automatically in [`<dyn ScheduleStrategy>::execute_logic`] for convenience’s sake
-#[async_trait::async_trait]
+#[async_trait]
 pub trait ScheduleStrategy: Send + Sync {
     async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>);
+}
+
+#[async_trait]
+impl<S: ScheduleStrategy + ?Sized> ScheduleStrategy for Arc<S> {
+    async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
+        self.as_ref().handle(task, emitter).await;
+    }
 }
 
 /// [`SequentialSchedulingPolicy`] is an implementation of [`ScheduleStrategy`] and executes the
 /// task sequentially, only once it finishes, does it reschedule the same task. This is the default
 /// scheduling strategy used by [`Task`]
 pub struct SequentialSchedulingPolicy;
-#[async_trait::async_trait]
+#[async_trait]
 impl ScheduleStrategy for SequentialSchedulingPolicy {
     async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
         task.run(emitter).await.ok();
@@ -29,7 +37,7 @@ impl ScheduleStrategy for SequentialSchedulingPolicy {
 /// in the background, while it also reschedules other tasks to execute, one should be careful when
 /// using this to not run into the [Thundering Herd Problem](https://en.wikipedia.org/wiki/Thundering_herd_problem)
 pub struct ConcurrentSchedulingPolicy;
-#[async_trait::async_trait]
+#[async_trait]
 impl ScheduleStrategy for ConcurrentSchedulingPolicy {
     async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
         tokio::spawn(async move {
@@ -59,7 +67,7 @@ impl CancelPreviousSchedulingPolicy {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl ScheduleStrategy for CancelPreviousSchedulingPolicy {
     async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
         let old_handle = self.0.swap(None);
@@ -93,7 +101,7 @@ impl CancelCurrentSchedulingPolicy {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl ScheduleStrategy for CancelCurrentSchedulingPolicy {
     async fn handle(&self, task: Arc<Task>, emitter: Arc<TaskEventEmitter>) {
         let is_free = &self.0;
