@@ -43,7 +43,7 @@ use std::sync::Arc;
 /// let fallback_frame = FallbackTaskFrame::new(primary_frame, secondary_frame);
 ///
 /// let task = Task::define(TaskScheduleInterval::from_secs(1), fallback_frame);
-/// CHRONOLOG_SCHEDULER.register(task).await;
+/// CHRONOLOG_SCHEDULER.schedule_owned(task).await;
 /// ```
 pub struct FallbackTaskFrame<T: 'static, T2: 'static> {
     primary: T,
