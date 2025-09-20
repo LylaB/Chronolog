@@ -102,7 +102,9 @@ impl TaskEventEmitter {
             let cloned_metadata = metadata.clone();
             let cloned_payload = payload_arc.clone();
             tokio::spawn(async move {
-                cloned_listener.execute(cloned_metadata, cloned_payload).await;
+                cloned_listener
+                    .execute(cloned_metadata, cloned_payload)
+                    .await;
             });
         }
     }

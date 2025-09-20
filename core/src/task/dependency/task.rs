@@ -71,12 +71,12 @@ impl From<TaskDependencyConfig> for TaskDependency {
         let counter_clone = slf.counter.clone();
         let resolve_behavior_clone = slf.resolve_behavior.clone();
         let task_clone = slf.task.clone();
-        
+
         tokio::task::spawn_blocking(move || {
             let counter_clone = counter_clone.clone();
             let resolve_behavior_clone = resolve_behavior_clone.clone();
             let task_clone = task_clone.clone();
-            
+
             async move {
                 task_clone
                     .frame

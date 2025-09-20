@@ -4,7 +4,7 @@ use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU64;
-use std::sync::{Arc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// [`ObserverFieldListener`] is the mechanism that drives the reactivity of [`ObserverField`],
