@@ -65,6 +65,21 @@ pub trait TaskFrame: Send + Sync {
     fn on_end(&self) -> TaskEndEvent;
 }
 
+#[async_trait]
+impl<F: TaskFrame + ?Sized> TaskFrame for Arc<F> {
+    async fn execute(&self, metadata: Arc<dyn TaskMetadata + Send + Sync>, emitter: Arc<TaskEventEmitter>) -> Result<(), TaskError> {
+        self.as_ref().execute(metadata, emitter).await
+    }
+
+    fn on_start(&self) -> TaskStartEvent {
+        self.as_ref().on_start()
+    }
+
+    fn on_end(&self) -> TaskEndEvent {
+        self.as_ref().on_end()
+    }
+}
+
 /// [`TaskFrameBuilder`] acts more as a utility rather than a full feature, it allows to construct
 /// the default implemented task frames with a more builder syntax
 ///
