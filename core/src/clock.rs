@@ -1,6 +1,7 @@
 pub mod system_clock;
 pub mod virtual_clock;
 
+use std::sync::Arc;
 pub use system_clock::SystemClock;
 pub use virtual_clock::VirtualClock;
 
@@ -38,6 +39,17 @@ pub trait SchedulerClock: Send + Sync {
     async fn idle_to(&self, to: SystemTime);
 }
 
+#[async_trait]
+impl<C: SchedulerClock + ?Sized> SchedulerClock for Arc<C> {
+    async fn now(&self) -> SystemTime {
+        self.as_ref().now().await
+    }
+
+    async fn idle_to(&self, to: SystemTime) {
+        self.as_ref().idle_to(to).await
+    }
+}
+
 /// [`AdvanceableScheduleClock`] is an optional extension to [`SchedulerClock`] which, as the name
 /// suggests, allows for arbitrary advancement of time via [`AdvanceableScheduleClock::advance`] or
 /// [`AdvanceableScheduleClock::advance_to`] methods, specific clocks might not support arbitrary
@@ -57,6 +69,17 @@ pub trait AdvanceableScheduleClock: SchedulerClock {
 
     /// Advanced the time to a specified future time
     async fn advance_to(&self, to: SystemTime);
+}
+
+#[async_trait]
+impl<AC: AdvanceableScheduleClock> AdvanceableScheduleClock for Arc<AC> {
+    async fn advance(&self, duration: Duration) {
+        self.as_ref().advance(duration).await
+    }
+
+    async fn advance_to(&self, to: SystemTime) {
+        self.as_ref().advance_to(to).await
+    }
 }
 
 #[allow(unused)]
