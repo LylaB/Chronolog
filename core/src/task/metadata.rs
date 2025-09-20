@@ -154,6 +154,24 @@ pub trait TaskMetadata: Send + Sync {
     fn debug_label(&self) -> ObserverField<String>;
 }
 
+impl<M: TaskMetadata + ?Sized> TaskMetadata for Arc<M> {
+    fn max_runs(&self) -> Option<NonZeroU64> {
+        self.as_ref().max_runs()
+    }
+
+    fn runs(&self) -> ObserverField<u64> {
+        self.as_ref().runs()
+    }
+
+    fn last_execution(&self) -> ObserverField<DateTime<Local>> {
+        self.as_ref().last_execution()
+    }
+
+    fn debug_label(&self) -> ObserverField<String> {
+        self.as_ref().debug_label()
+    }
+}
+
 /// A default implementation of the [`TaskMetadata`], it contains the bare minimum information
 /// to describe a [`TaskMetadata`], this is used for internally tracking state of the task.
 /// Unless one wishes to track more state in task metadata, this container is the go-to default
