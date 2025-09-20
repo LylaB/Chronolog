@@ -81,18 +81,17 @@ impl SchedulerTaskStore for EphemeralDefaultTaskStore {
         lock.push(Reverse(EphemeralScheduledItem(task, sys_future_time, idx)));
     }
 
-    async fn store(&self, clock: Arc<dyn SchedulerClock>, task: Task) -> usize {
+    async fn store(&self, clock: Arc<dyn SchedulerClock>, task: Arc<Task>) -> usize {
         let sys_last_exec = clock.now().await;
         let last_exec = system_time_to_date_time(sys_last_exec);
         let future_time = task.schedule().next_after(&last_exec).unwrap();
-        let task_arc: Arc<Task> = Arc::new(task);
         let idx: usize = {
             let idx = self.id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            self.tasks.insert(idx, task_arc.clone());
+            self.tasks.insert(idx, task.clone());
             idx
         };
         let sys_future_time = SystemTime::from(future_time);
-        let entry = EphemeralScheduledItem(task_arc, sys_future_time, idx);
+        let entry = EphemeralScheduledItem(task, sys_future_time, idx);
         let mut earliest_tasks = self.earliest_sorted.lock().await;
         earliest_tasks.push(Reverse(entry));
 
